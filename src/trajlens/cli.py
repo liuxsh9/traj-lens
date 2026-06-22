@@ -65,6 +65,34 @@ def ingest(path: str, db: str = "trajlens.db", blob_dir: str = "blobs"):
 
 
 @app.command()
+def annotate(
+    config_path: str = typer.Argument(..., help="Annotator YAML config path"),
+    db: str = "trajlens.db",
+    concurrency: int = 5,
+):
+    """Run an annotator on all stored trajectories."""
+    import asyncio
+    from trajlens.annotate.runner import load_annotator_config, load_annotator_module, run_annotator
+    from trajlens.store import db as dbmod
+
+    conn = dbmod.connect(db)
+    dbmod.migrate(conn)
+    spec = load_annotator_config(config_path)
+    mod = load_annotator_module(spec)
+    typer.echo(f"Running {spec.id}@{spec.version} ({spec.type}, target={spec.target.value})")
+
+    profiles = None
+    if spec.type == "llm":
+        from trajlens.annotate.llm_client import load_profiles
+        profiles = load_profiles()
+
+    result = asyncio.run(run_annotator(
+        conn, spec, mod, llm_profiles=profiles,
+        semaphore=asyncio.Semaphore(concurrency)))
+    typer.echo(json.dumps(result, indent=2))
+
+
+@app.command()
 def serve(host: str = "127.0.0.1", port: int = 8000):
     """Run the API + (later) hosted web."""
     import uvicorn

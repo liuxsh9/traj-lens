@@ -2,7 +2,7 @@
 
 > 基于设计文档 `docs/superpowers/specs/2026-06-21-traj-lens-design.md` 各章节逐项展开。
 > 每条对应设计中一个可交付能力，不是文件粒度。
-> 更新日期：2026-06-22（slice-1 收尾）
+> 更新日期：2026-06-22（slice-2 标注中间件）
 
 ---
 
@@ -79,54 +79,58 @@
 ## Slice 2 — 标注中间件（§9.4.2）
 
 ### 标注器接口（§7.1）
-- [ ] `AnnotatorSpec` 数据类（id / target / context / version / depends_on）
-- [ ] `Target` 枚举：SESSION / USER_TURN / ASSISTANT_TURN / STEP / TOOL_RESULT
-- [ ] `ContextPolicy` 枚举：SELF / WINDOW(k) / PREFIX / WHOLE
-- [ ] `RuleAnnotator` 协议（`annotate(unit, ctx) -> Value`）
-- [ ] `LLMAnnotator` 协议（`build(unit, ctx) -> messages` / `parse(resp) -> Value`）
+- [x] `AnnotatorSpec` 数据类（id / target / context / version） — `annotate/__init__.py`
+- [x] `Target` 枚举：SESSION / USER_TURN / ASSISTANT_TURN / STEP / TOOL_RESULT
+- [x] `ContextPolicy` 解析：self / window:k / prefix / whole
+- [x] `RuleAnnotator` 协议（`annotate(unit, ctx) -> Value`）
+- [x] `LLMAnnotator` 协议（`build(unit, ctx) -> messages` / `parse(resp) -> Value`）
 
 ### 标注版本（§4）
-- [ ] `annotator_version` 自动派生（规则: `logic_version` + config hash；LLM: config hash）
-- [ ] 缓存键 `(target_hash, annotator_id, version)`
-- [ ] 多版本共存 + `active_version` 指针
+- [x] `annotator_version` 自动派生（sha256(type+config)[:12]）— `annotate/__init__.py`
+- [x] 缓存键 `(target_hash, annotator_id, version)` — `runner.py` + `002_annotations.sql`
+- [x] 多版本共存 + `active_version` 指针 — `annotators` 表 active 列
 - [ ] §10.B.6 版本覆盖率查询
 
 ### 标注存储
-- [ ] `annotations` 表 migration
-- [ ] `annotators` 版本台账表 migration
-- [ ] annotation CRUD（put 幂等 / get / query by target+annotator+version）
+- [x] `annotations` 表 migration — `002_annotations.sql`
+- [x] `annotators` 版本台账表 migration
+- [x] annotation CRUD（put 幂等 / get / query by target+annotator+version）— `repo.py`
 
 ### Runner（§7.3）
-- [ ] 幂等并发 runner（按 target 枚举、按 context 投影、cache hit 跳过）
-- [ ] `jobs` 表 + 进度/错误追踪
-- [ ] 失败隔离（FatalError 记录，不中断批次）
-- [ ] §10.C.8 单写者纪律实装
+- [x] 幂等并发 runner（按 target 枚举、按 context 投影、cache hit 跳过）— `runner.py`
+- [x] `jobs` 表 + 进度/错误追踪
+- [x] 失败隔离（FatalError 记录，不中断批次）
+- [x] §10.C.8 单写者纪律（`BEGIN IMMEDIATE` + `put_annotation`）
 
 ### 可靠 LLM 客户端（§7.4）
-- [ ] profile 化配置（`config/llm_profiles.yaml` + Pydantic 校验 + `${ENV}` 引用）
-- [ ] OpenAI 兼容 client 薄包装（base_url + key + model）
-- [ ] §10.C.10 单一重试归属（保留 SDK 内置 max_retries，包装层不叠）
-- [ ] 全局信号量限流
-- [ ] 结构化输出强制 schema（provider structured-output 优先，fallback parse+repair）
-- [ ] 可观测：每次记 tokens/延迟/成本
+- [x] profile 化配置（`config/llm_profiles.yaml` + `${ENV}` 引用）— `llm_client.py`
+- [x] OpenAI 兼容 client（httpx async, base_url + key + model）
+- [x] 指数退避重试（429/5xx/timeout, 4xx 快速失败, max 4次）
+- [x] 全局信号量限流
+- [x] 结构化输出（json_schema+strict 优先, fallback parse+repair）
+- [x] 可观测：logging tokens/延迟
+- [x] 代理三模式：none / system / explicit URL
 
 ### YAML 配置加载（§7.2）
-- [ ] `config/annotators/*.yaml` loader（type/target/context/prompt_template/schema/profile）
-- [ ] `config/llm_profiles.yaml` loader
-- [ ] 配置变更 → version 自动变
+- [x] `config/annotators/*.yaml` loader — `runner.py: load_annotator_config`
+- [x] `config/llm_profiles.yaml` loader — `llm_client.py: load_profiles`
+- [x] 配置变更 → version 自动变 — `compute_version`
 
 ### 首批标注器
-- [ ] 1 个 rule 标注器（如 `loop_detect`：同文件编辑重复 ≥3）
-- [ ] 1 个 LLM 标注器（如 `pushback`：USER_TURN 级，标注 correction/rejection/failure_report）
+- [x] `loop_detect` rule 标注器（STEP 级，同文件编辑 ≥3）— `annotate/rules/loop_detect.py`
+- [x] `pushback` LLM 标注器（USER_TURN 级，correction/rejection/failure_report）— `annotate/llm/pushback.py`
 
 ### API 扩展
-- [ ] `POST /api/v1/jobs`（建标注任务）
-- [ ] `GET /api/v1/jobs/{id}`（进度/错误）
-- [ ] `GET /api/v1/trajectories/{hash}` 返回中叠加 annotations
+- [x] `POST /api/v1/jobs`（建标注任务，后台线程执行）— `routes.py`
+- [x] `GET /api/v1/jobs/{id}`（进度/错误）
+- [x] `GET /api/v1/trajectories/{hash}` 返回中叠加 annotations
 - [ ] `GET /api/v1/catalog/annotators`（id / target / schema / active_version）
 
+### CLI 扩展
+- [x] `trajlens annotate <config.yaml>` — `cli.py`
+
 ### Web 扩展
-- [ ] viewer 中展示 turn/step 级标注 chip
+- [x] viewer 中展示标注 chip — `TrajectoryView.tsx`
 
 ### §10.B.5 依赖一等声明
 - [ ] spec 中 `depends_on` 字段 + 一趟拓扑排序
@@ -263,10 +267,10 @@
 | 分类 | 总计 | 完成 | 进度 |
 |---|---|---|---|
 | Slice 1 骨架 | 35 | 33 | **94%** |
-| Slice 2 标注 | 26 | 0 | 0% |
+| Slice 2 标注 | 27 | 24 | **89%** |
 | Slice 3 指标+浏览 | 10 | 0 | 0% |
 | Slice 4 挑数据闭环 | 14 | 0 | 0% |
 | 富 Viewer | 12 | 0 | 0% |
 | Slice 5 铺广度 | 12 | 0 | 0% |
 | 基础设施 | 12 | 8 | 67% |
-| **合计** | **121** | **41** | **34%** |
+| **合计** | **122** | **65** | **53%** |

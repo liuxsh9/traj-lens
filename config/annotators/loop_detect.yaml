@@ -1,0 +1,5 @@
+id: loop_detect
+type: rule
+target: step
+context: prefix
+module: trajlens.annotate.rules.loop_detect

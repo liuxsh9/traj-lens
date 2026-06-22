@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getTrajectory, type Item, type Trajectory } from "../api";
+import { getTrajectory, type Annotation, type Item, type Trajectory } from "../api";
 
 export function TrajectoryView({ hash, onBack }: { hash: string; onBack: () => void }) {
   const [traj, setTraj] = useState<Trajectory | null>(null);
@@ -21,6 +21,13 @@ export function TrajectoryView({ hash, onBack }: { hash: string; onBack: () => v
             {traj.content_hash.slice(0, 16)}…{" "}
             <span className="dim">· {traj.items.length} items</span>
           </h2>
+          {traj.annotations && traj.annotations.length > 0 && (
+            <div className="annotation-bar">
+              {traj.annotations.map((a, i) => (
+                <AnnotationChip key={i} ann={a} />
+              ))}
+            </div>
+          )}
           <div className="transcript">
             {traj.items.map((it, i) => (
               <ItemRow key={i} item={it} />
@@ -42,6 +49,21 @@ function ItemRow({ item }: { item: Item }) {
       </div>
       <div className="body">{renderBody(item)}</div>
     </div>
+  );
+}
+
+function AnnotationChip({ ann }: { ann: Annotation }) {
+  let parsed: Record<string, unknown> = {};
+  try { parsed = JSON.parse(ann.value); } catch { /* show raw */ }
+  const summary = parsed.category
+    ? `${parsed.category}${parsed.confidence ? ` (${(parsed.confidence as number).toFixed(1)})` : ""}`
+    : parsed.detected !== undefined
+      ? `loop:${parsed.detected ? "yes" : "no"}`
+      : ann.value.slice(0, 30);
+  return (
+    <span className="chip" title={`${ann.annotator_id}@${ann.annotator_version.slice(0, 6)} — ${ann.value}`}>
+      {ann.annotator_id}: {summary}
+    </span>
   );
 }
 

@@ -17,11 +17,20 @@ export interface Item {
   provenance: Provenance | null;
 }
 
+export interface Annotation {
+  target_hash: string;
+  annotator_id: string;
+  annotator_version: string;
+  value: string;
+  produced_at: string;
+}
+
 export interface Trajectory {
   content_hash: string;
   items: Item[];
   tools: unknown[];
   meta: Record<string, unknown>;
+  annotations?: Annotation[];
 }
 
 export interface TrajSummary {

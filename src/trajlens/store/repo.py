@@ -65,6 +65,77 @@ def get_trajectory(conn, content_hash: str) -> Trajectory | None:
                       tools=json.loads(row["tools"]), meta=json.loads(row["meta"]))
 
 
+
+# ── Annotation CRUD ────────────────────────────────────────────────────
+
+def register_annotator(conn, *, id: str, version: str, config_hash: str) -> None:
+    conn.execute("UPDATE annotators SET active=0 WHERE id=?", (id,))
+    conn.execute(
+        "INSERT OR REPLACE INTO annotators(id, version, config_hash, active, registered_at)"
+        " VALUES(?, ?, ?, 1, ?)", (id, version, config_hash, _now()))
+    conn.commit()
+
+
+def put_annotation(conn, *, target_hash: str, annotator_id: str,
+                   annotator_version: str, value, inputs_hash: str) -> None:
+    conn.execute("BEGIN IMMEDIATE")
+    conn.execute(
+        "INSERT OR REPLACE INTO annotations"
+        "(target_hash, annotator_id, annotator_version, value, inputs_hash, produced_at)"
+        " VALUES(?, ?, ?, ?, ?, ?)",
+        (target_hash, annotator_id, annotator_version,
+         json.dumps(value, ensure_ascii=False), inputs_hash, _now()))
+    conn.commit()
+
+
+def get_annotations(conn, target_hash: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT a.* FROM annotations a"
+        " JOIN annotators t ON a.annotator_id=t.id AND a.annotator_version=t.version"
+        " WHERE a.target_hash=? AND t.active=1", (target_hash,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_annotations_for_trajectory(conn, content_hash: str) -> list[dict]:
+    # ponytail: annotation_targets maps target_hash→content_hash; query via that
+    rows = conn.execute(
+        "SELECT a.target_hash, a.annotator_id, a.annotator_version, a.value, a.produced_at"
+        " FROM annotations a"
+        " JOIN annotation_targets at ON a.target_hash=at.target_hash"
+        " JOIN annotators t ON a.annotator_id=t.id AND a.annotator_version=t.version"
+        " WHERE at.content_hash=? AND t.active=1"
+        " ORDER BY a.produced_at", (content_hash,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def link_annotation_target(conn, *, target_hash: str, content_hash: str,
+                           target_type: str, target_idx: int) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO annotation_targets(target_hash, content_hash, target_type, target_idx)"
+        " VALUES(?, ?, ?, ?)", (target_hash, content_hash, target_type, target_idx))
+
+
+def create_job(conn, *, job_id: str, annotator_id: str) -> dict:
+    now = _now()
+    conn.execute(
+        "INSERT INTO jobs(id, annotator_id, status, total, done, errors, created_at, updated_at)"
+        " VALUES(?, ?, 'pending', 0, 0, '[]', ?, ?)", (job_id, annotator_id, now, now))
+    conn.commit()
+    return {"id": job_id, "annotator_id": annotator_id, "status": "pending"}
+
+
+def update_job(conn, job_id: str, **kwargs) -> None:
+    sets = ", ".join(f"{k}=?" for k in kwargs)
+    vals = list(kwargs.values())
+    conn.execute(f"UPDATE jobs SET {sets}, updated_at=? WHERE id=?", vals + [_now(), job_id])
+    conn.commit()
+
+
+def get_job(conn, job_id: str) -> dict | None:
+    row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+    return dict(row) if row else None
+
+
 def list_trajectories(conn) -> list[dict]:
     rows = conn.execute(
         "SELECT content_hash, items_count, created_at FROM trajectories"
