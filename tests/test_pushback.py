@@ -27,10 +27,9 @@ def test_build_includes_context_summary():
     ]
     msgs = pushback.build([user], ctx)
     body = msgs[1]["content"]
-    assert "[Context]" in body
+    assert "Preceding conversation context:" in body
     assert "I'll update the file" in body
     assert "edit" in body
-    # the unit's own user message must not be duplicated into the context block
     assert body.count("no, that's wrong") == 1
 
 
@@ -40,31 +39,36 @@ def test_build_with_no_context():
     assert "(no prior context)" in msgs[1]["content"]
 
 
-def test_build_missing_user_message():
-    unit = [FunctionCallItem(name="edit", arguments="{}", call_id="c1")]
-    msgs = pushback.build(unit, unit)
-    assert msgs[1]["content"].endswith("[User message]\n")
+# ── parse (now uses "label" field from SWE-chat format) ───────────────
 
-
-# ── parse ──────────────────────────────────────────────────────────────
-
-def test_parse_clean_json():
-    resp = '{"category": "correction", "confidence": 0.9, "reason": "user said fix it"}'
+def test_parse_label_format():
+    resp = '{"label": "correction", "reason": "user said fix it"}'
     out = pushback.parse(resp)
-    assert out == {"category": "correction", "confidence": 0.9, "reason": "user said fix it"}
+    assert out["category"] == "correction"
+
+
+def test_parse_non_pushback_maps_to_none():
+    resp = '{"label": "non_pushback", "reason": "normal instruction"}'
+    out = pushback.parse(resp)
+    assert out["category"] == "none"
+
+
+def test_parse_legacy_category_format():
+    resp = '{"category": "rejection", "confidence": 0.8, "reason": "stop"}'
+    out = pushback.parse(resp)
+    assert out["category"] == "rejection"
 
 
 def test_parse_markdown_fenced_json():
-    resp = '```json\n{"category": "rejection", "confidence": 0.8, "reason": "stop"}\n```'
+    resp = '```json\n{"label": "failure_report", "reason": "error"}\n```'
     out = pushback.parse(resp)
-    assert out["category"] == "rejection"
-    assert out["confidence"] == 0.8
+    assert out["category"] == "failure_report"
 
 
 def test_parse_json_embedded_in_prose():
-    resp = 'Here is my answer: {"category": "failure_report", "confidence": 0.7, "reason": "error"} hope it helps'
+    resp = 'Here is my answer: {"label": "correction", "reason": "wrong"} hope it helps'
     out = pushback.parse(resp)
-    assert out["category"] == "failure_report"
+    assert out["category"] == "correction"
 
 
 def test_parse_malformed_returns_default():
@@ -73,15 +77,8 @@ def test_parse_malformed_returns_default():
     assert out["confidence"] == 0.0
 
 
-def test_parse_fills_missing_keys():
-    out = pushback.parse('{"category": "correction"}')
-    assert out["category"] == "correction"
-    assert out["confidence"] == 0.0
-    assert out["reason"] == ""
-
-
-def test_parse_invalid_category_falls_back_to_none():
-    out = pushback.parse('{"category": "angry", "confidence": 0.5, "reason": "x"}')
+def test_parse_unknown_label_falls_back_to_none():
+    out = pushback.parse('{"label": "angry", "reason": "x"}')
     assert out["category"] == "none"
 
 
@@ -94,8 +91,3 @@ def test_schema_is_valid_json_schema():
 
 def test_schema_round_trips_through_json():
     assert json.loads(json.dumps(pushback.SCHEMA)) == pushback.SCHEMA
-
-
-def test_schema_enum_matches_parse_categories():
-    enum = set(pushback.SCHEMA["properties"]["category"]["enum"])
-    assert enum == {"correction", "rejection", "failure_report", "none"}

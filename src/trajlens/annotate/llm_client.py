@@ -38,16 +38,18 @@ def load_profiles(path: str = "config/llm_profiles.yaml") -> dict[str, LLMProfil
     return profiles
 
 
-def _resolve_proxy(proxy: str) -> bool | str | None:
-    """Map profile proxy setting to httpx's `proxy` arg.
-
-    none → False (bypass env), system → None (httpx reads env), URL → URL.
-    """
+def _make_client_kwargs(proxy: str, timeout: float) -> dict:
+    """Build httpx.AsyncClient kwargs for the proxy mode."""
+    kwargs: dict = {"timeout": timeout}
     if proxy == "none":
-        return False
-    if proxy == "system":
-        return None
-    return proxy
+        # bypass system proxy env vars entirely
+        kwargs["proxy"] = None
+        kwargs["trust_env"] = False
+    elif proxy == "system":
+        pass  # httpx reads HTTP_PROXY/HTTPS_PROXY from env
+    else:
+        kwargs["proxy"] = proxy
+    return kwargs
 
 
 def _repair_json(text: str) -> dict:
@@ -95,13 +97,13 @@ async def chat_completion(
 
     url = profile.base_url.rstrip("/") + "/chat/completions"
     headers = {"Authorization": f"Bearer {profile.api_key}"}
-    proxy = _resolve_proxy(profile.proxy)
+    client_kwargs = _make_client_kwargs(profile.proxy, profile.timeout)
 
     last_exc: Exception | None = None
     for attempt in range(len(_BACKOFF)):
         try:
             t0 = time.monotonic()
-            async with httpx.AsyncClient(timeout=profile.timeout, proxy=proxy) as client:
+            async with httpx.AsyncClient(**client_kwargs) as client:
                 if semaphore is not None:
                     async with semaphore:
                         resp = await client.post(url, json=payload, headers=headers)

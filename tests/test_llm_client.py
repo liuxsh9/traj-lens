@@ -6,8 +6,8 @@ import pytest
 
 from trajlens.annotate.llm_client import (
     LLMProfile,
+    _make_client_kwargs,
     _repair_json,
-    _resolve_proxy,
     chat_completion,
     load_profiles,
 )
@@ -72,18 +72,21 @@ def test_repair_json_malformed_raises():
         _repair_json("no json here at all")
 
 
-# ── _resolve_proxy ───────────────────────────────────────────────────────
+# ── _make_client_kwargs ───────────────────────────────────────────────────
 
-def test_resolve_proxy_none():
-    assert _resolve_proxy("none") is False
-
-
-def test_resolve_proxy_system():
-    assert _resolve_proxy("system") is None
+def test_proxy_none():
+    kw = _make_client_kwargs("none", 30)
+    assert kw["trust_env"] is False
 
 
-def test_resolve_proxy_explicit():
-    assert _resolve_proxy("http://proxy:8080") == "http://proxy:8080"
+def test_proxy_system():
+    kw = _make_client_kwargs("system", 30)
+    assert "proxy" not in kw
+
+
+def test_proxy_explicit():
+    kw = _make_client_kwargs("http://proxy:8080", 30)
+    assert kw["proxy"] == "http://proxy:8080"
 
 
 # ── chat_completion (mock transport) ─────────────────────────────────────

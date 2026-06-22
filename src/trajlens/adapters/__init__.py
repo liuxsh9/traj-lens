@@ -1,10 +1,11 @@
 from trajlens.core.registry import Registry
-from . import openai_messages, claude_code, codex
+from . import openai_messages, claude_code, codex, swe_chat
 
 ADAPTERS = Registry()
 ADAPTERS.register("openai_messages", openai_messages)
 ADAPTERS.register("claude_code", claude_code)
 ADAPTERS.register("codex", codex)
+ADAPTERS.register("swe_chat", swe_chat)
 
 
 def detect_and_parse(raw):
