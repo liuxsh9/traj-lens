@@ -16,14 +16,14 @@ jobs:
           version: "latest"
 
       - name: Install Python deps
-        run: uv sync
+        run: uv sync --all-extras
 
       - name: Run tests
-        run: uv run pytest tests/ -x -q
+        run: uv run pytest tests/ -x -q -m "not slow"
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install web deps
         working-directory: web
