@@ -1,0 +1,38 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install Python deps
+        run: uv sync
+
+      - name: Run tests
+        run: uv run pytest tests/ -x -q
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install web deps
+        working-directory: web
+        run: npm ci
+
+      - name: TypeScript check
+        working-directory: web
+        run: npx tsc --noEmit
+
+      - name: Build web
+        working-directory: web
+        run: npm run build

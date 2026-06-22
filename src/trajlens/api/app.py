@@ -1,7 +1,14 @@
+import pathlib
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import FileResponse
 
 from trajlens.store import db as dbmod
 from trajlens.api.routes import router
+
+# ponytail: web/dist is the vite build output; serve if present, skip if not
+WEB_DIST = pathlib.Path(__file__).resolve().parent.parent.parent.parent / "web" / "dist"
 
 
 def create_app(db_path: str = "trajlens.db", blob_dir: str = "blobs") -> FastAPI:
@@ -11,7 +18,24 @@ def create_app(db_path: str = "trajlens.db", blob_dir: str = "blobs") -> FastAPI
     app.state.conn = conn
     app.state.blob_dir = blob_dir
     app.include_router(router)
+    _mount_web(app)
     return app
+
+
+def _mount_web(app: FastAPI) -> None:
+    if not WEB_DIST.is_dir():
+        return
+    index = WEB_DIST / "index.html"
+    if not index.exists():
+        return
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def _spa_fallback(full_path: str):
+        # serve static file if it exists, otherwise index.html (SPA)
+        candidate = WEB_DIST / full_path
+        if candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(index)
 
 
 app = create_app()

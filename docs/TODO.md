@@ -2,7 +2,7 @@
 
 > 基于设计文档 `docs/superpowers/specs/2026-06-21-traj-lens-design.md` 各章节逐项展开。
 > 每条对应设计中一个可交付能力，不是文件粒度。
-> 更新日期：2026-06-22（adapter 增补）
+> 更新日期：2026-06-22（slice-1 收尾）
 
 ---
 
@@ -50,7 +50,7 @@
 - [x] `GET /api/v1/trajectories/{hash}` 详情（items+grouping DTO）— `api/routes.py`
 - [x] `GET /api/health` — `api/routes.py`
 - [ ] API 版本化前缀 `/api/v1` 的 Router 组织（当前已满足，路由拆分留到路由增多时）
-- [ ] FastAPI StaticFiles 托管打包 web（单可部署物 `trajlens serve`）
+- [x] FastAPI StaticFiles 托管打包 web（单可部署物 `trajlens serve`）— `api/app.py` SPA fallback
 - [ ] 批量 ingest 端点（inline 多条）
 - [ ] OpenAPI schema 导出 / Swagger UI 验证
 
@@ -66,7 +66,7 @@
 - [x] 语料列表页（hash / items_count / created_at） — `web/src/App.tsx`
 - [x] 单轨迹线性转录视图：按 item 类型着色、gutter 显示 run/step — `web/src/components/TrajectoryView.tsx`
 - [x] 暗色 CSS 主题（mockup 配色复用）— `web/src/styles.css`
-- [ ] `npm run build` 产物被 FastAPI serve（StaticFiles 托管）
+- [x] `npm run build` 产物被 FastAPI serve（StaticFiles 托管）
 
 ### 测试 & 样本
 - [x] core 单测：model / identity / grouping / registry — 12 tests
@@ -253,8 +253,8 @@
 - [x] 设计文档 + viewer mockups
 - [x] 实现计划（slice-1）
 - [x] 测试样本语料 + 兼容性回归
-- [ ] CI（GitHub Actions：pytest + tsc + build）
-- [ ] CLAUDE.md 项目级指令
+- [x] CI（GitHub Actions：pytest + tsc + build）— `.github/workflows/ci.yml`
+- [x] CLAUDE.md 项目级指令
 
 ---
 
@@ -262,11 +262,11 @@
 
 | 分类 | 总计 | 完成 | 进度 |
 |---|---|---|---|
-| Slice 1 骨架 | 35 | 31 | **89%** |
+| Slice 1 骨架 | 35 | 33 | **94%** |
 | Slice 2 标注 | 26 | 0 | 0% |
 | Slice 3 指标+浏览 | 10 | 0 | 0% |
 | Slice 4 挑数据闭环 | 14 | 0 | 0% |
 | 富 Viewer | 12 | 0 | 0% |
 | Slice 5 铺广度 | 12 | 0 | 0% |
-| 基础设施 | 12 | 6 | 50% |
-| **合计** | **121** | **37** | **31%** |
+| 基础设施 | 12 | 8 | 67% |
+| **合计** | **121** | **41** | **34%** |
