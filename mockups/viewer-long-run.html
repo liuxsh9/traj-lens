@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>traj-lens · 长自主run viewer</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232c; --border:#2a313c;
+    --ink:#e6edf3; --dim:#9aa7b4; --faint:#6b7785;
+    --user:#4aa8ff; --reason:#c8923a; --call:#3fb950; --tool:#56758c;
+    --bad:#f85149; --good:#3fb950; --warn:#d29922; --loop:#d2691e;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
+  .wrap{max-width:1080px;margin:0 auto;padding:26px 22px 70px}
+  h1{font-size:19px;margin:0 0 4px} .sub{color:var(--dim);font-size:13px;margin:0 0 18px}
+  .callout{background:linear-gradient(90deg,#16241a,#161b22);border:1px solid #2c4a33;border-left:3px solid var(--good);border-radius:8px;padding:11px 13px;margin:0 0 18px;font-size:12.5px;color:#cfe9d6}
+  .callout b{color:#7ee29a}
+  .legend{display:flex;gap:13px;flex-wrap:wrap;font-size:11px;color:var(--dim);margin:0 0 14px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+
+  .frame{background:var(--bg);border:1px solid var(--border);border-radius:11px;overflow:hidden;box-shadow:0 8px 30px #0008}
+  .shdr{display:flex;align-items:center;gap:13px;padding:11px 14px;background:var(--panel2);border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .score{font-family:var(--mono);font-weight:700;font-size:18px;padding:1px 9px;border-radius:7px;background:#16271a;color:#7ee29a;border:1px solid #2c4a33}
+  .kv{font-size:12px;color:var(--dim)} .kv b{color:var(--ink);font-family:var(--mono)}
+  .htools{margin-left:auto;display:flex;gap:7px;align-items:center}
+  .htool{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);color:var(--dim);background:#10151c;cursor:pointer}
+  .htool.on{color:#7cc0ff;border-color:#274a6b;background:#162536}
+
+  .two{display:grid;grid-template-columns:64px 1fr}
+  .mini{background:#0b0e12;border-right:1px solid var(--border);padding:9px 0;position:relative}
+  .ticks{display:flex;flex-direction:column;gap:2px;align-items:center}
+  .tick{width:34px;height:4px;border-radius:2px;opacity:.85;position:relative}
+  .tick.big{height:7px}
+  .t-user{background:var(--user)} .t-reason{background:var(--reason)} .t-call{background:var(--call)} .t-tool{background:var(--tool)} .t-asst{background:#56607a}
+  .tick .flag{position:absolute;right:-8px;top:-3px;width:0;height:0;border:5px solid transparent;border-left-color:var(--bad)}
+  .tick .flagl{position:absolute;right:-8px;top:-3px;width:0;height:0;border:5px solid transparent;border-left-color:var(--loop)}
+  .viewbox{position:absolute;left:5px;right:5px;border:1.5px solid #3a78c2;background:#1d2b3a33;border-radius:3px;pointer-events:none}
+  .phaselab{font-size:9px;color:var(--faint);text-align:center;margin:5px 0 1px;font-family:var(--mono)}
+
+  .cards{padding:11px;display:flex;flex-direction:column;gap:7px}
+  .card{border:1px solid var(--border);border-radius:9px;overflow:hidden;position:relative}
+  .card.user{background:#101822;border-color:#1d3148}
+  .card.asst{background:var(--panel)}
+  .chd{display:flex;align-items:center;gap:9px;padding:7px 11px;cursor:pointer}
+  .sel{width:13px;height:13px;border-radius:4px;border:1.5px solid var(--faint);flex:none}
+  .actor{font-size:13px} .stepn{font-family:var(--mono);font-size:10px;color:var(--faint);flex:none;width:30px;text-align:right}
+  .summ{font-size:12.5px;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .meta{margin-left:auto;display:flex;gap:5px;align-items:center;flex:none}
+  .chip{font-size:10.5px;font-family:var(--mono);padding:1px 7px;border-radius:5px;border:1px solid var(--border);color:var(--dim);background:#10151c;white-space:nowrap}
+  .chip.intent{color:#7cc0ff;border-color:#274a6b}
+  .chip.err{color:#ffb4ad;border-color:#5a2a27;background:#241312}
+  .chip.loop{color:#f0b682;border-color:#5a401e;background:#241c10}
+  .foot{font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid var(--border);color:var(--dim)}
+  .foot.call{color:#7ee29a;border-color:#2c4a33}
+  .caret{color:var(--faint);font-size:11px;width:12px;text-align:center}
+
+  /* run group wrapper */
+  .run{border:1px solid #2c3848;border-radius:10px;background:#0f141b;overflow:hidden}
+  .run-hd{display:flex;align-items:center;gap:10px;padding:9px 12px;background:linear-gradient(90deg,#141d27,#0f141b);border-bottom:1px solid #2c3848}
+  .run-hd .rt{font-size:13px;color:var(--ink)} .run-hd .rt b{font-family:var(--mono)}
+  .run-hd .agg{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+  .run-body{padding:7px;display:flex;flex-direction:column;gap:6px}
+  .phasehdr{font-family:var(--mono);font-size:10px;color:var(--faint);padding:5px 4px 1px;letter-spacing:.04em;text-transform:uppercase}
+
+  .exp{border-top:1px solid var(--border);background:#0d1014}
+  .irow{display:grid;grid-template-columns:74px 1fr;border-bottom:1px solid #15191f}
+  .irow:last-child{border-bottom:none}
+  .ig{padding:7px 8px;font-family:var(--mono);font-size:10px;color:var(--faint);text-align:right;border-right:1px solid #15191f;display:flex;flex-direction:column;gap:2px;align-items:flex-end}
+  .ig .ty{font-weight:700}
+  .l-reason{color:var(--reason)} .l-call{color:var(--call)} .l-tool{color:var(--tool)} .l-asst{color:var(--ink)}
+  .ib{padding:7px 12px;min-width:0}
+  .bar{border-left:3px solid transparent;padding-left:10px}
+  .b-reason{border-color:var(--reason)} .b-call{border-color:var(--call)} .b-tool{border-color:var(--tool)}
+  .who{font-family:var(--mono);font-size:10px;margin-bottom:3px;color:var(--dim)}
+  .muted{color:var(--dim)} .txt{color:var(--ink)}
+  .toolblk{font-family:var(--mono);font-size:11px;color:#9fd0b0;background:#10160f;border:1px solid #1f3320;border-radius:6px;padding:5px 8px;margin-top:3px;white-space:pre-wrap}
+  .toolblk.fail{color:#ffb4ad;background:#160f0f;border-color:#3a2020}
+  .note{font-size:12px;color:var(--faint);margin:12px 2px 0;line-height:1.55} .note b{color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>长自主 run — 1 user prompt → 78 steps（教师蒸馏 / 复杂 bugfix）</h1>
+  <p class="sub">同一套 B+C，但 card 单元 = <b>step</b>（think→act→observe），不是会话轮。所以这条不是「2 卡」，是「1 user 卡 + 78 step 卡」装在一个 run group 里。</p>
+
+  <div class="callout">
+    <b>1 user + N steps，而非 2 卡</b>。assistant 自主段是一串 step（每个 = 一次推理+工具调用+结果），可整段折叠看 run 级聚合，也可逐 step 读。minimap 把 78 步压成一条真实长带——这正是「全局形状」的用武之地。
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--user)"></i>user</span>
+    <span><i style="background:var(--reason)"></i>reasoning</span>
+    <span><i style="background:var(--call)"></i>function_call</span>
+    <span><i style="background:var(--tool)"></i>tool_result</span>
+    <span><i style="background:var(--bad)"></i>error-recovery</span>
+    <span><i style="background:var(--loop)"></i>疑似 loop</span>
+  </div>
+
+  <div class="frame">
+    <div class="shdr">
+      <span class="score">N/A</span><span class="kv">success（蒸馏无验收，judge 评）</span>
+      <span class="kv">312 atoms · 1 user · <b>78 steps</b></span>
+      <span class="kv">eff <b>3.1×</b></span>
+      <div class="htools">
+        <span class="htool on">逐 step</span><span class="htool">逐 phase</span><span class="htool">✂ Trim/Mask</span>
+      </div>
+    </div>
+
+    <div class="two">
+      <!-- minimap: long autonomous band -->
+      <div class="mini">
+        <div class="viewbox" style="top:120px;height:70px"></div>
+        <div class="ticks">
+          <div class="tick big t-user"></div>
+          <div class="phaselab">explore</div>
+          <div class="tick t-reason"></div><div class="tick t-call"></div><div class="tick t-tool"></div>
+          <div class="tick t-call"></div><div class="tick t-tool"></div><div class="tick t-reason"></div>
+          <div class="tick t-call"></div><div class="tick t-tool"></div><div class="tick t-call"></div>
+          <div class="phaselab">edit · test loop</div>
+          <div class="tick t-reason"></div><div class="tick t-call"></div><div class="tick t-tool"></div>
+          <div class="tick t-call"></div><div class="tick t-tool"><span class="flag"></span></div>
+          <div class="tick t-reason"></div><div class="tick t-call"></div><div class="tick t-tool"></div>
+          <div class="tick t-call"></div><div class="tick t-tool"></div>
+          <div class="tick t-reason"></div><div class="tick t-call"></div><div class="tick t-tool"><span class="flagl"></span></div>
+          <div class="tick t-call"></div><div class="tick t-tool"></div><div class="tick t-call"></div>
+          <div class="tick t-tool"></div><div class="tick t-reason"></div><div class="tick t-call"></div>
+          <div class="tick t-tool"></div>
+          <div class="phaselab">finalize</div>
+          <div class="tick t-reason"></div><div class="tick t-call"></div><div class="tick t-tool"></div>
+          <div class="tick t-asst"></div>
+        </div>
+      </div>
+
+      <!-- cards -->
+      <div class="cards">
+        <div class="card user"><div class="chd">
+          <span class="sel"></span><span class="actor">🧑</span><span class="stepn">—</span>
+          <span class="summ">Refactor the auth middleware to support async session validation; keep all tests green.</span>
+          <span class="meta"><span class="chip intent">feature</span></span>
+        </div></div>
+
+        <!-- the whole autonomous run as ONE collapsible group of step-cards -->
+        <div class="run">
+          <div class="run-hd">
+            <span class="actor">🤖</span><span class="rt">autonomous run · <b>78 steps</b> · 296 tool calls · 7 files</span>
+            <span class="agg">
+              <span class="chip err">2 error-recovery</span>
+              <span class="chip loop">1 疑似 loop</span>
+              <span class="caret">▾</span>
+            </span>
+          </div>
+          <div class="run-body">
+            <div class="phasehdr">explore · steps 1–9</div>
+            <div class="card asst"><div class="chd"><span class="sel"></span><span class="stepn">s1</span>
+              <span class="summ">map repo & locate middleware</span>
+              <span class="meta"><span class="foot call">LS</span><span class="foot call">Read ×3</span><span class="caret">▸</span></span></div></div>
+            <div class="card asst"><div class="chd"><span class="sel"></span><span class="stepn">s4</span>
+              <span class="summ">grep call sites of validate_session</span>
+              <span class="meta"><span class="foot call">Grep</span><span class="foot call">Read</span><span class="caret">▸</span></span></div></div>
+
+            <div class="phasehdr">edit · test loop · steps 10–61</div>
+            <!-- one EXPANDED step = think-act-observe, an error-recovery -->
+            <div class="card asst">
+              <div class="chd"><span class="sel"></span><span class="stepn">s23</span>
+                <span class="summ" style="color:#ffb4ad">edit → run tests → FAIL → diagnose</span>
+                <span class="meta"><span class="chip err">error-recovery</span><span class="foot call">Edit</span><span class="foot call">Bash</span><span class="caret">▾</span></span></div>
+              <div class="exp">
+                <div class="irow"><div class="ig"><span class="ty l-reason">reason</span><span>it91</span></div>
+                  <div class="ib"><div class="bar b-reason"><div class="who l-reason">reasoning</div><div class="muted">Make validate_session awaitable and update the two call sites.</div></div></div></div>
+                <div class="irow"><div class="ig"><span class="ty l-call">call</span><span>it92</span></div>
+                  <div class="ib"><div class="bar b-call"><div class="who l-call">function_call · Edit · c47</div><div class="toolblk">Edit("auth.py", old="def validate_session", new="async def validate_session")</div></div></div></div>
+                <div class="irow"><div class="ig"><span class="ty l-call">call</span><span>it93</span></div>
+                  <div class="ib"><div class="bar b-call"><div class="who l-call">function_call · Bash · c48</div><div class="toolblk">pytest tests/test_auth.py -q</div></div></div></div>
+                <div class="irow"><div class="ig"><span class="ty l-tool">tool</span><span>it94</span></div>
+                  <div class="ib"><div class="bar b-tool"><div class="who l-tool">tool_result · c48</div><div class="toolblk fail">E   RuntimeWarning: coroutine 'validate_session' was never awaited
+1 failed, 12 passed</div></div></div></div>
+              </div>
+            </div>
+            <div class="card asst"><div class="chd"><span class="sel"></span><span class="stepn">s24</span>
+              <span class="summ">await the call sites; re-run</span>
+              <span class="meta"><span class="foot call">Edit ×2</span><span class="foot call">Bash</span><span class="caret">▸</span></span></div></div>
+            <div class="card asst"><div class="chd"><span class="sel"></span><span class="stepn">s38</span>
+              <span class="summ" style="color:#f0b682">re-edit same line 3rd time</span>
+              <span class="meta"><span class="chip loop">loop?</span><span class="foot call">Edit</span><span class="foot call">Bash</span><span class="caret">▸</span></span></div></div>
+
+            <div class="phasehdr">finalize · steps 62–78</div>
+            <div class="card asst"><div class="chd"><span class="sel"></span><span class="stepn">s78</span>
+              <span class="summ">all green · final summary</span>
+              <span class="meta"><span class="foot call">Bash</span><span class="caret">▸</span></span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="shdr" style="border-top:1px solid var(--border);border-bottom:none">
+      <span style="font-size:12px;color:var(--dim)">Mask 低价值 steps（如 loop 段 s36–s40）weight=0 → 只训高价值步；整段 run 是一条训练样本，prefix 天然完整（上文=单条 user prompt）</span>
+    </div>
+  </div>
+
+  <p class="note">
+    <b>答你两问</b>：① 不会变 2 卡——card=step，78 步=78 张 step 卡，装在一个可整体折叠的 run group 里。② assistant 绝不被压成单条缩略——run 头给聚合（步数/工具/error-recovery/loop），逐 step 卡给节奏，展开给 typed-item 正文。<br>
+    <b>core 影响</b>：steps/phases 是对扁平 item 流的<b>确定性投影</b>（不新存一层）；annotator target 增加 <b>STEP</b>（loop/redundant-call/error-recovery 这些信号本就活在自主段里，没有 user 轮可挂）。phase 分组（explore/edit-test/finalize）是<b>可选的 rule 标注器</b>，不入 core。
+  </p>
+</div>
+</body>
+</html>

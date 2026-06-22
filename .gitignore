@@ -1,0 +1,35 @@
+# Local agent / session scratch (not project source)
+.superpowers/
+.remember/
+.codegraph/
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node / web
+node_modules/
+web/dist/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data (SQLite + raw blob store)
+*.sqlite
+*.sqlite3
+*.db
+/data/
+/blobs/
+
+# OS / editor
+.DS_Store
+*.log
