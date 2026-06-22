@@ -2,7 +2,7 @@
 
 > 基于设计文档 `docs/superpowers/specs/2026-06-21-traj-lens-design.md` 各章节逐项展开。
 > 每条对应设计中一个可交付能力，不是文件粒度。
-> 更新日期：2026-06-22
+> 更新日期：2026-06-22（adapter 增补）
 
 ---
 
@@ -29,8 +29,8 @@
 ### 适配器（§5.2 ①）
 - [x] `openai_messages` adapter：OpenAI ChatCompletions / panguml2 → Trajectory — `adapters/openai_messages.py`
 - [x] `detect_and_parse()` 嗅探+注册表 — `adapters/__init__.py`
-- [ ] Claude Code 原始日志 adapter — `adapters/claude_code.py`
-- [ ] Codex adapter
+- [x] Claude Code 原始日志 adapter — `adapters/claude_code.py`
+- [x] Codex adapter — `adapters/codex.py`
 - [ ] 通用 SWE-chat parquet adapter（raw row→items）
 
 ### 存储（§6 + §10.C.8/9）
@@ -262,11 +262,11 @@
 
 | 分类 | 总计 | 完成 | 进度 |
 |---|---|---|---|
-| Slice 1 骨架 | 35 | 29 | **83%** |
+| Slice 1 骨架 | 35 | 31 | **89%** |
 | Slice 2 标注 | 26 | 0 | 0% |
 | Slice 3 指标+浏览 | 10 | 0 | 0% |
 | Slice 4 挑数据闭环 | 14 | 0 | 0% |
 | 富 Viewer | 12 | 0 | 0% |
 | Slice 5 铺广度 | 12 | 0 | 0% |
 | 基础设施 | 12 | 6 | 50% |
-| **合计** | **121** | **35** | **29%** |
+| **合计** | **121** | **37** | **31%** |
