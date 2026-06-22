@@ -1,0 +1,177 @@
+{
+  "version": "2.0.0",
+  "meta_info": {
+    "teacher": "unknown",
+    "query_source": "stepfun-ai/Step-3.5-Flash-SFT",
+    "response_generate_time": "2026-03-14",
+    "response_update_time": "2026-03-14",
+    "owner": "00000000",
+    "language": "en",
+    "category": "code",
+    "rounds": 1,
+    "unique_info": {
+      "code_sft_category": "code_capability",
+      "code_sft_classification": {
+        "confidence": 0.95,
+        "reason": "Clear programming task with specific function implementation requested. Contains code fence, shell terms, error terms, and reasoning content. Assistant provides complete Python function implementation.",
+        "model": "qwen3-coder-plus",
+        "usage": {
+          "prompt_tokens": 1382,
+          "completion_tokens": 317,
+          "total_tokens": 1699,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        }
+      },
+      "data_id": "sha256:v1:a2f41d6e8b8d119497c6268f1260918c29cdd687160d70e140b831703b856828",
+      "data_label": {
+        "meta": {
+          "schema_version": "1",
+          "label_version": "inline-v1",
+          "source_format": "openai_conversations",
+          "mode": "refresh",
+          "created_at": "2026-03-26T21:05:29.558531",
+          "updated_at": "2026-03-28T18:45:10.806208",
+          "pass1_at": "2026-03-26T21:05:29.558531",
+          "pass2_at": "2026-03-28T18:45:10.806208"
+        },
+        "turns": [
+          {
+            "turn_index": 1,
+            "sample_id": "tid:v1:0a14739ce2c495a44560",
+            "labels": {
+              "intent": "build",
+              "language": [
+                "python"
+              ],
+              "domain": [],
+              "task": [
+                "feature-implementation",
+                "code-explanation"
+              ],
+              "difficulty": "intermediate",
+              "concept": [
+                "recursion"
+              ],
+              "agentic": [],
+              "constraint": [],
+              "context": "single-function",
+              "confidence": {
+                "intent": 0.95,
+                "language": 0.99,
+                "domain": 0.85,
+                "task": 0.9,
+                "difficulty": 0.75,
+                "concept": 0.85,
+                "agentic": 0.98,
+                "constraint": 0.99,
+                "context": 0.9
+              },
+              "unmapped": [],
+              "canonicalized": []
+            },
+            "labeling_monitor": {
+              "status": "success",
+              "llm_calls": 2,
+              "total_prompt_tokens": 7919,
+              "total_completion_tokens": 117,
+              "elapsed_seconds": 28.83
+            },
+            "value": {
+              "complexity": {
+                "instruction": 5,
+                "analytical_depth": 5,
+                "implementation": 5,
+                "overall": 5
+              },
+              "quality": {
+                "correctness": 9,
+                "code_quality": 8,
+                "explanation": 8,
+                "completeness": 9,
+                "overall": 8
+              },
+              "reasoning": {
+                "clarity": 7,
+                "consistency": 7,
+                "self_correction": false,
+                "overall": 7
+              },
+              "rarity": {
+                "score": 3.9,
+                "tag_rarity": 4.622,
+                "combo_rarity": 11.883,
+                "effective_confidence": 0.89,
+                "uncertainty": 0.11,
+                "stats_ref": {
+                  "source": "/Volumes/MOVESPEED/sft-label-data/Step-3.5-Flash-SFT-code-sft-jsonl-qwen3-coder-plus_labeled_20260326_210154/meta_label_data/summary_stats_labeling.json",
+                  "total_samples": 2089691,
+                  "timestamp": "2026-03-28T11:42:16.279006"
+                }
+              },
+              "flags": [],
+              "thinking_mode": "fast",
+              "value_score": 6.3,
+              "confidence": 0.9,
+              "selection_score": 5.31,
+              "intra_class_rank": 5.61
+            },
+            "scoring_monitor": {
+              "status": "success",
+              "llm_calls": 1,
+              "prompt_tokens": 2892,
+              "completion_tokens": 82,
+              "attempts": 1
+            }
+          }
+        ],
+        "conversation": {
+          "conversation_id": "tid:v1:0a14739ce2c495a44560::row:1",
+          "conversation_uid": "/Volumes/MOVESPEED/sft-label-data/Step-3.5-Flash-SFT-code-sft-jsonl-qwen3-coder-plus/chunk_0.jsonl::tid:v1:0a14739ce2c495a44560::row:1",
+          "conversation_key": "/Volumes/MOVESPEED/sft-label-data/Step-3.5-Flash-SFT-code-sft-jsonl-qwen3-coder-plus/chunk_0.jsonl::tid:v1:0a14739ce2c495a44560::row:1",
+          "source_file": "/Volumes/MOVESPEED/sft-label-data/Step-3.5-Flash-SFT-code-sft-jsonl-qwen3-coder-plus/chunk_0.jsonl",
+          "turn_count": 1,
+          "conv_value": 6.3,
+          "conv_value_v2": 6.3,
+          "conv_selection": 5.31,
+          "conv_selection_v2": 5.31,
+          "conv_selection_extension_v2": 5.31,
+          "peak_complexity": 5,
+          "conv_rarity": 3.9,
+          "observed_turn_ratio": 1.0,
+          "inherited_turn_ratio": 0.0,
+          "rarity_confidence": 0.9,
+          "compression_gap": 0.0,
+          "late_turn_gain": 0.0,
+          "tool_turn_ratio": 0.0,
+          "unique_tool_count": 0,
+          "unique_file_count": 0,
+          "thinking_mode": "fast",
+          "detail": {
+            "negative_flags": [],
+            "score_confidence": 0.9,
+            "observed_turns": 1,
+            "inherited_turns": 0
+          }
+        }
+      }
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": ""
+    },
+    {
+      "role": "user",
+      "content": "Write a python function `max_nested_list_depth` to solve the problem below.\n\nWrite a python function to return the maximum number of nested lists within a given list. A nested list is a list contained within another list. The function should handle lists of arbitrary depth and return the maximum level of nesting found. The function name should be max_nested_list_depth."
+    },
+    {
+      "role": "assistant",
+      "reasoning_content": "We need to write a Python function `max_nested_list_depth` that returns the maximum number of nested lists within a given list. Essentially, given a list (which may contain other lists nested arbitrarily), we want to compute the depth of nesting. For example:\n\n- [] => depth 0? Or 1? Need to define. The problem: \"maximum number of nested lists within a given list.\" Typically, depth of a list is defined as the maximum number of nested list levels. If the list itself counts as level 1, then an empty list has depth 1. But often we consider depth as number of levels of nesting, e.g., [] => 1, [1,2] => 1, [ [1] ] => 2, [ [ [ ] ] ] => 3. However, the phrasing \"maximum number of nested lists within a given list\" could be interpreted as count of nested lists inside, not including the outermost? But typical problems: \"Maximum depth of nested list\" returns the depth of nesting, e.g., if there are no inner lists, depth = 1. But sometimes they want 0 for non-list? Let's read the problem statement: \"Write a python function to return the maximum number of nested lists within a given list. A nested list is a list contained within another list. The function should handle lists of arbitrary depth and return the maximum level of nesting found.\" So we have a given list, we want the maximum level of nesting. Usually, the outermost list is level 1. So we need to return 1 for a list with no inner lists. But sometimes they consider the outermost list as level 0 and nested ones increase depth. For example, if the list is [1, [2, [3]]] then depth is 3? Let's test: outer list = level 1, [2, [3]] = level 2, [3] = level 3. So maximum depth = 3. If we considered outer list as level 0, depth would be 2. Which is more common? In many coding interview questions about \"maximum depth of nested list\" they define depth as number of nested lists, counting each level, and the outermost is level 1. For example, Leetcode 559: \"Maximum Depth of N-ary Tree\" but that's different. There's also \"Maximum Depth of Nested List\" on LintCode: \"Given a nested list, return the maximum depth.\" The examples: Input: [] => Output: 1. Input: [1,2] => 1. Input: [1,[2,3]] => 2. So yes, outermost counts as depth 1. So we'll adopt that.\n\nBut we need to handle arbitrary depth and possibly mixed types (non-lists). The function should only count list elements that are lists. For any non-list element, it doesn't increase depth.\n\nWe can implement recursively: define a function that given a list, returns its depth. For each element, if it's a list, compute its depth (recursive) and take max, then overall depth = 1 + max depth among its list elements. If there are no list elements, depth = 1. However, careful: If the list is empty, there are no elements, then max among list elements is undefined; we can treat as 0, so depth = 1. So base case: empty list => 1.\n\nBut if we consider that an empty list still has depth 1 because it's a list. That matches.\n\nAlternatively, we could treat depth as 0 for non-list input, but our function expects a list as input. So we assume input is a list.\n\nWe should also consider that there might be nested lists inside non-list containers? No, only lists.\n\nEdge cases: list containing non-list items, list containing list of lists, etc.\n\nImplementation:\n\n```python\ndef max_nested_list_depth(lst):\n    if not isinstance(lst, list):\n        raise TypeError(\"Input must be a list\")\n    # Base: if empty list, depth = 1\n    if not lst:\n        return 1\n    # Compute depth for each element that is a list\n    max_child_depth = 0\n    for item in lst:\n        if isinstance(item, list):\n            child_depth = max_nested_list_depth(item)\n            if child_depth > max_child_depth:\n                max_child_depth = child_depth\n    return 1 + max_child_depth\n```\n\nBut this returns depth at least 1. However, consider list with no inner lists: max_child_depth = 0, returns 1. Good.\n\nIf there are nested lists, it adds 1 for each level.\n\nWe can also handle very deep recursion with iterative approach using stack, but recursion is fine for typical depths; Python recursion limit might be a concern if depth > 1000, but problem likely expects recursion.\n\nWe should also consider that the list may contain other iterables that are not lists, but they shouldn't be considered. Only list objects count.\n\nNow, write the function with docstring and possibly type hints.\n\nAdd test cases.\n\nWe need to output the code only? The user says \"Write a python function `max_nested_list_depth` to solve the problem below.\" So we need to provide the function. Possibly include explanation? But the instruction: \"Write a python function ...\" So we should produce code.\n\nThus final answer: provide the function definition, with docstring and maybe some examples in comments.\n\nBut we might need to consider that the problem could be interpreted differently: maybe they want the maximum number of nested lists, i.e., count of lists that are nested inside each other? That would be same as depth. Yes.\n\nAlternatively, they might want to count the deepest nesting level, not counting the outermost? Let's re-read: \"return the maximum number of nested lists within a given list.\" Could be interpreted as: given a list, how many lists are nested inside it? For example, in [1, [2, [3]]], there are two nested lists inside the outer list: [2, [3]] and [3]. So the count is 2. But the phrase \"maximum level of nesting found\" suggests depth. It says \"maximum level of nesting found.\" So depth.\n\nAlso, \"A nested list is a list contained within another list.\" So any list that is inside another list is a nested list. But \"maximum number of nested lists\" could be interpreted as the number of nested lists at the deepest level? But that seems ambiguous. However, \"maximum level of nesting\" is clearly depth.\n\nThus we implement depth.\n\nLet's produce final answer with function and docstring. Also, we can add a helper to avoid recursion limit? Not needed.\n\nBut also consider that there could be lists that are not directly nested but in parallel branches: e.g., [[1], [2, [3]]] => depth = 3 (outer=1, [2, [3]] is depth 2? Actually compute: outer list depth 1. Its elements: [1] => depth 2? Wait: compute recursively: For [1], it's a list with no inner lists, so depth = 1. Then outer depth = 1 + max(1) = 2. For [2, [3]]: it's a list with inner list [3] => depth of [3] = 1, so [2, [3]] depth = 1+1=2. So overall outer depth = 1+max(2,2)=3? Actually careful: we compute child depth for each element that is a list: for [1], child_depth = 1 (since it returns 1). For [2, [3]], child_depth = max_nested_list_depth([2, [3]]) = 1 + max(child depth among its inner lists). Inside [2, [3]], it has [3] as list => child depth for [3] = 1, so [2, [3]] returns 2. So max_child_depth = max(1,2) = 2. Then outer returns 1 + 2 = 3. So depth = 3. That matches: outer (level1) -> [2, [3]] (level2) -> [3] (level3). So correct.\n\nNow, what about lists that contain non-list items? It's fine.\n\nEdge: If the input is not a list, we could return 0 or raise error. But the problem says \"given list\", so we can assume it's a list. We can add a check.\n\nThus final code:\n\n```python\ndef max_nested_list_depth(lst):\n    \"\"\"\n    Return the maximum depth of nested lists within the given list.\n    \n    The outermost list is considered depth 1. If there are no inner lists, the depth is 1.\n    \n    Parameters:\n    lst (list): The list to evaluate.\n    \n    Returns:\n    int: The maximum nesting depth.\n    \n    Example:\n    >>> max_nested_list_depth([1, 2, 3])\n    1\n    >>> max_nested_list_depth([1, [2, 3], 4])\n    2\n    >>> max_nested_list_depth([[[[ ]]]])\n    4\n    \"\"\"\n    if not isinstance(lst, list):\n        raise TypeError(\"Input must be a list\")\n    \n    # If the list is empty, depth is 1 (the list itself)\n    if not lst:\n        return 1\n    \n    max_child_depth = 0\n    for item in lst:\n        if isinstance(item, list):\n            child_depth = max_nested_list_depth(item)\n            if child_depth > max_child_depth:\n                max_child_depth = child_depth\n    \n    return 1 + max_child_depth\n```\n\nWe could also write a non-recursive version using a stack: push (list, current_depth) and track max depth. But recursion is simpler.\n\nNow, check with examples:\n\n- [] -> returns 1.\n- [1,2] -> no list items, max_child_depth=0, returns 1.\n- [1, [2,3], 4] -> inner list depth: [2,3] returns 1, so max_child_depth=1, returns 2.\n- [1, [2, [3]]] -> inner [2, [3]]: compute: inner [3] returns 1, so [2, [3]] returns 2, so max_child_depth=2, returns 3.\n- [[[[ ]]]] -> compute: innermost [] returns 1, then next [] returns 2, then next [] returns 3, then outer [] returns 4. So returns 4.\n\nWorks.\n\nPotential improvement: handle non-list but iterable? Not needed.\n\nNow produce final answer: just the code. Possibly include import? No.\n\nThus final.",
+      "content": "```python\ndef max_nested_list_depth(lst):\n    \"\"\"\n    Return the maximum depth of nested lists within the given list.\n    \n    The outermost list is considered depth 1. If there are no inner lists, the depth is 1.\n    \n    Parameters:\n    lst (list): The list to evaluate.\n    \n    Returns:\n    int: The maximum nesting depth.\n    \n    Examples:\n    >>> max_nested_list_depth([1, 2, 3])\n    1\n    >>> max_nested_list_depth([1, [2, 3], 4])\n    2\n    >>> max_nested_list_depth([[[[ ]]]])\n    4\n    \"\"\"\n    if not isinstance(lst, list):\n        raise TypeError(\"Input must be a list\")\n    \n    # An empty list still has depth 1 (the list itself)\n    if not lst:\n        return 1\n    \n    max_child_depth = 0\n    for item in lst:\n        if isinstance(item, list):\n            child_depth = max_nested_list_depth(item)\n            if child_depth > max_child_depth:\n                max_child_depth = child_depth\n    \n    return 1 + max_child_depth\n```",
+      "weight": 1
+    }
+  ]
+}
