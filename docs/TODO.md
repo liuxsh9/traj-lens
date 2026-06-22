@@ -2,7 +2,7 @@
 
 > 基于设计文档 `docs/superpowers/specs/2026-06-21-traj-lens-design.md` 各章节逐项展开。
 > 每条对应设计中一个可交付能力，不是文件粒度。
-> 更新日期：2026-06-22（slice-2 标注中间件）
+> 更新日期：2026-06-22（slice-2 收尾 + pushback 调优）
 
 ---
 
@@ -31,7 +31,7 @@
 - [x] `detect_and_parse()` 嗅探+注册表 — `adapters/__init__.py`
 - [x] Claude Code 原始日志 adapter — `adapters/claude_code.py`
 - [x] Codex adapter — `adapters/codex.py`
-- [ ] 通用 SWE-chat parquet adapter（raw row→items）
+- [x] SWE-chat adapter（JSON rows→items）— `adapters/swe_chat.py`
 
 ### 存储（§6 + §10.C.8/9）
 - [x] SQLite WAL + busy_timeout + synchronous=NORMAL — `store/db.py`
@@ -218,9 +218,9 @@
 ## Slice 5 — 铺广度（§9.4.5）
 
 ### 更多 adapter
-- [ ] Claude Code 原始日志 adapter
-- [ ] Codex adapter
-- [ ] SWE-chat parquet adapter
+- [x] Claude Code 原始日志 adapter — done in slice 1
+- [x] Codex adapter — done in slice 1
+- [x] SWE-chat adapter — done in slice 2
 - [ ] 自研脚手架 adapter
 
 ### 更多标注器
@@ -266,11 +266,11 @@
 
 | 分类 | 总计 | 完成 | 进度 |
 |---|---|---|---|
-| Slice 1 骨架 | 35 | 33 | **94%** |
+| Slice 1 骨架 | 35 | 34 | **97%** |
 | Slice 2 标注 | 27 | 24 | **89%** |
 | Slice 3 指标+浏览 | 10 | 0 | 0% |
 | Slice 4 挑数据闭环 | 14 | 0 | 0% |
 | 富 Viewer | 12 | 0 | 0% |
-| Slice 5 铺广度 | 12 | 0 | 0% |
+| Slice 5 铺广度 | 12 | 3 | 25% |
 | 基础设施 | 12 | 8 | 67% |
-| **合计** | **122** | **65** | **53%** |
+| **合计** | **122** | **69** | **57%** |
