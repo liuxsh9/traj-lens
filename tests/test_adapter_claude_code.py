@@ -19,7 +19,7 @@ def test_sniff():
 
 
 def test_parses_items():
-    traj = detect_and_parse(_load("cc_small.jsonl"))
+    traj, _ = detect_and_parse(_load("cc_small.jsonl"))
     assert len(traj.content_hash) == 64
     types = [it.type for it in traj.items]
     assert "message" in types

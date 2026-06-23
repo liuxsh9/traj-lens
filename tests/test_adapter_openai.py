@@ -9,7 +9,7 @@ def _load():
 
 
 def test_parses_into_typed_items():
-    t = detect_and_parse(_load())
+    t, _ = detect_and_parse(_load())
     types = [it.type for it in t.items]
     assert types == [
         "message",            # system
@@ -22,7 +22,7 @@ def test_parses_into_typed_items():
 
 
 def test_provenance_and_hash_set():
-    t = detect_and_parse(_load())
+    t, _ = detect_and_parse(_load())
     assert len(t.content_hash) == 64
     fc = next(it for it in t.items if it.type == "function_call")
     assert fc.provenance.origin == "messages[2].tool_calls[0]"
@@ -31,7 +31,7 @@ def test_provenance_and_hash_set():
 
 
 def test_tool_output_keeps_call_pairing():
-    t = detect_and_parse(_load())
+    t, _ = detect_and_parse(_load())
     call = next(it for it in t.items if it.type == "function_call")
     out = next(it for it in t.items if it.type == "function_call_output")
     assert call.call_id == out.call_id == "call_bj"

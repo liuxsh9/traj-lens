@@ -33,3 +33,4 @@ web/dist/
 # OS / editor
 .DS_Store
 *.log
+e2e_blobs/

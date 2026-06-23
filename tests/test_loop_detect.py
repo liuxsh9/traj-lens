@@ -61,7 +61,7 @@ async def test_runner_e2e_on_sample(tmp_path):
     dbmod.migrate(conn)
 
     raw = json.loads(LONG_RUN.read_text())
-    traj = detect_and_parse(raw)
+    traj, _ = detect_and_parse(raw)
     ch = repo.put_trajectory(conn, traj, source_path=str(LONG_RUN),
                              raw_bytes=LONG_RUN.read_bytes(), blob_dir=str(tmp_path / "blobs"))
 
@@ -93,7 +93,7 @@ async def test_runner_is_cache_aware(tmp_path):
     conn = dbmod.connect(str(tmp_path / "t.db"))
     dbmod.migrate(conn)
     raw = json.loads(LONG_RUN.read_text())
-    traj = detect_and_parse(raw)
+    traj, _ = detect_and_parse(raw)
     ch = repo.put_trajectory(conn, traj, blob_dir=str(tmp_path / "blobs"))
 
     spec = runner.load_annotator_config("config/annotators/loop_detect.yaml")

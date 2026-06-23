@@ -43,12 +43,24 @@ def parse(raw: dict) -> Trajectory:
                 items.append(MessageItem(role="system", content=content, provenance=prov))
 
         elif tt == "tool_use":
-            tool_name = r.get("tool_name") or "unknown"
+            tool_name = r.get("tool_name") or ""
             tool_input = r.get("tool_input_json") or "{}"
             if isinstance(tool_input, dict):
                 tool_input = json.dumps(tool_input, ensure_ascii=False)
+            # ponytail: some SWE-chat variants embed tool info in content JSON
+            _KEY_TO_TOOL = {"command": "bash", "pattern": "glob",
+                            "file_path": "read", "filePath": "read"}
+            if not tool_name and content.startswith("{"):
+                try:
+                    cj = json.loads(content)
+                    if isinstance(cj, dict) and cj:
+                        key = next(iter(cj))
+                        tool_name = _KEY_TO_TOOL.get(key, key)
+                        tool_input = content
+                except (json.JSONDecodeError, StopIteration):
+                    pass
             items.append(FunctionCallItem(
-                name=tool_name,
+                name=tool_name or "unknown",
                 arguments=tool_input,
                 call_id=r.get("tool_call_id") or f"sc_{i}",
                 provenance=prov))

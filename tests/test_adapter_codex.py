@@ -19,7 +19,7 @@ def test_sniff():
 
 
 def test_parses_items():
-    traj = detect_and_parse(_load("codex_small.jsonl"))
+    traj, _ = detect_and_parse(_load("codex_small.jsonl"))
     assert len(traj.content_hash) == 64
     types = [it.type for it in traj.items]
     assert "function_call" in types

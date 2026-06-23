@@ -25,7 +25,7 @@ assert OPENAI_SAMPLES, "no openai_messages samples found"
 @pytest.mark.parametrize("path", OPENAI_SAMPLES, ids=lambda p: p.name)
 def test_openai_sample_ingests_and_groups(path, tmp_path):
     raw = json.loads(path.read_text())
-    traj = detect_and_parse(raw)
+    traj, _ = detect_and_parse(raw)
 
     assert len(traj.content_hash) == 64
     assert traj.items, "no items parsed"
@@ -55,7 +55,7 @@ def _load_jsonl(path):
 @pytest.mark.parametrize("path", CC_SAMPLES, ids=lambda p: p.name)
 def test_cc_sample_ingests_and_groups(path, tmp_path):
     raw = _load_jsonl(path)
-    traj = detect_and_parse(raw)
+    traj, _ = detect_and_parse(raw)
     assert len(traj.content_hash) == 64
     assert traj.items, "no items parsed"
     grouped = grouping.assign_groups(traj.items)
@@ -69,7 +69,7 @@ def test_cc_sample_ingests_and_groups(path, tmp_path):
 @pytest.mark.parametrize("path", CODEX_SAMPLES, ids=lambda p: p.name)
 def test_codex_sample_ingests_and_groups(path, tmp_path):
     raw = _load_jsonl(path)
-    traj = detect_and_parse(raw)
+    traj, _ = detect_and_parse(raw)
     assert len(traj.content_hash) == 64
     assert traj.items, "no items parsed"
     grouped = grouping.assign_groups(traj.items)

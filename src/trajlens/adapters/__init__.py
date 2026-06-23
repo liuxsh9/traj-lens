@@ -8,10 +8,11 @@ ADAPTERS.register("codex", codex)
 ADAPTERS.register("swe_chat", swe_chat)
 
 
-def detect_and_parse(raw):
+def detect_and_parse(raw) -> tuple:
     """Sniff registered adapters and parse with the first match.
+    Returns (Trajectory, format_name).
     raw: dict (single-object formats like openai_messages) or list[dict] (JSONL session logs)."""
-    for _name, mod in ADAPTERS.items():
+    for name, mod in ADAPTERS.items():
         if mod.sniff(raw):
-            return mod.parse(raw)
+            return mod.parse(raw), name
     raise ValueError("no adapter matched the input shape")
