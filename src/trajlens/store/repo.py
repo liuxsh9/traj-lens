@@ -177,8 +177,10 @@ def get_dataset_stats(conn, dataset_id: str) -> dict:
     rows = conn.execute("""
         SELECT m.metric_id, m.value
         FROM metrics m
-        INNER JOIN ingestions i ON i.content_hash = m.content_hash
-        INNER JOIN batches b ON i.batch_id = b.id AND b.dataset_id = ?
+        WHERE m.content_hash IN (
+            SELECT DISTINCT i.content_hash FROM ingestions i
+            JOIN batches b ON i.batch_id = b.id AND b.dataset_id = ?
+        )
     """, (dataset_id,)).fetchall()
 
     from collections import defaultdict, Counter
@@ -200,15 +202,14 @@ def get_dataset_stats(conn, dataset_id: str) -> dict:
     metrics_summary = {k: _summarize(v) for k, v in metric_vals.items()}
 
     # resolution distribution
+    ds_hashes_sql = """SELECT DISTINCT i.content_hash FROM ingestions i
+        JOIN batches b ON i.batch_id = b.id AND b.dataset_id = ?"""
     res_rows = conn.execute("""
         SELECT a.value
         FROM annotations a
-        JOIN annotation_targets at2 ON a.target_hash = at2.target_hash
         JOIN annotators n ON a.annotator_id = n.id AND a.annotator_version = n.version AND n.active = 1
-        JOIN ingestions i ON i.content_hash = at2.content_hash
-        JOIN batches b ON i.batch_id = b.id AND b.dataset_id = ?
         WHERE a.annotator_id = 'resolution'
-    """, (dataset_id,)).fetchall()
+        AND a.target_hash IN (""" + ds_hashes_sql + ")", (dataset_id,)).fetchall()
     res_dist = Counter()
     for r in res_rows:
         try:
@@ -221,12 +222,9 @@ def get_dataset_stats(conn, dataset_id: str) -> dict:
     tag_rows = conn.execute("""
         SELECT a.value
         FROM annotations a
-        JOIN annotation_targets at2 ON a.target_hash = at2.target_hash
         JOIN annotators n ON a.annotator_id = n.id AND a.annotator_version = n.version AND n.active = 1
-        JOIN ingestions i ON i.content_hash = at2.content_hash
-        JOIN batches b ON i.batch_id = b.id AND b.dataset_id = ?
         WHERE a.annotator_id = 'topic'
-    """, (dataset_id,)).fetchall()
+        AND a.target_hash IN (""" + ds_hashes_sql + ")", (dataset_id,)).fetchall()
     tag_counter = Counter()
     for r in tag_rows:
         try:
