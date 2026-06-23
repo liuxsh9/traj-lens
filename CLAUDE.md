@@ -40,3 +40,12 @@ docs/superpowers/specs/  # authoritative design doc
 - Tests: `uv run pytest`. Curated samples in `tests/samples/` serve as compatibility regression.
 - No unnecessary abstractions. No interface with one implementation.
 - Use `from __future__ import annotations` only if needed for <3.10 compat (we target 3.12).
+
+## Git workflow
+
+- **All changes must be committed** — never leave meaningful work as unstaged modifications across sessions.
+- **Commit message format**: `<type>: <concise summary>` (lowercase, no period). Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
+- **Group commits logically** — one concern per commit (e.g. "adapter refactor + its test fixes" is one commit, not five). Don't mix unrelated changes.
+- **Commit order matters** — if commit B depends on commit A (e.g. migration before the code that uses it), commit A first.
+- **Push after committing** unless explicitly told otherwise.
+- Generated artifacts (`e2e_blobs/`, `__pycache__/`, `*.db`) stay in `.gitignore`, never committed.
