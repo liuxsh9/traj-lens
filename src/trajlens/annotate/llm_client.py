@@ -29,6 +29,49 @@ def _load_dotenv(path: str = ".env") -> None:
 _BACKOFF = (0.5, 1.0, 2.0, 4.0)
 
 
+class _RateLimiter:
+    """Token-bucket RPS + semaphore concurrency, configured from env."""
+
+    def __init__(self, rps: float, max_concurrent: int):
+        self._sem = asyncio.Semaphore(max_concurrent)
+        self._rps = rps
+        self._tokens = float(rps)
+        self._last_refill = time.monotonic()
+        self._lock = asyncio.Lock()
+
+    async def __aenter__(self):
+        await self._sem.acquire()
+        async with self._lock:
+            now = time.monotonic()
+            self._tokens = min(self._rps, self._tokens + (now - self._last_refill) * self._rps)
+            self._last_refill = now
+            if self._tokens < 1.0:
+                wait = (1.0 - self._tokens) / self._rps
+                await asyncio.sleep(wait)
+                self._tokens = 0.0
+            else:
+                self._tokens -= 1.0
+        return self
+
+    async def __aexit__(self, *exc):
+        self._sem.release()
+
+
+# ponytail: module-level singleton, lazy-init from env on first use
+_limiter: _RateLimiter | None = None
+
+
+def _get_limiter() -> _RateLimiter:
+    global _limiter
+    if _limiter is None:
+        _load_dotenv()
+        rps = int(os.environ.get("LLM_RPS", "20"))
+        max_conc = int(os.environ.get("LLM_MAX_CONCURRENCY", "100"))
+        _limiter = _RateLimiter(rps, max_conc)
+        logger.info("rate limiter: rps=%d max_concurrency=%d", rps, max_conc)
+    return _limiter
+
+
 @dataclass
 class LLMProfile:
     name: str
@@ -95,7 +138,6 @@ async def chat_completion(
     messages: list[dict],
     *,
     json_schema: dict | None = None,
-    semaphore: asyncio.Semaphore | None = None,
 ) -> tuple[str, dict]:
     """Call an OpenAI-compatible /chat/completions endpoint. Returns (content, usage)."""
     payload: dict = {
@@ -114,17 +156,14 @@ async def chat_completion(
     url = profile.base_url.rstrip("/") + "/chat/completions"
     headers = {"Authorization": f"Bearer {profile.api_key}"}
     client_kwargs = _make_client_kwargs(profile.proxy, profile.timeout)
+    limiter = _get_limiter()
 
     last_exc: Exception | None = None
     for attempt in range(len(_BACKOFF)):
         try:
             t0 = time.monotonic()
-            async with httpx.AsyncClient(**client_kwargs) as client:
-                if semaphore is not None:
-                    async with semaphore:
-                        resp = await client.post(url, json=payload, headers=headers)
-                else:
-                    resp = await client.post(url, json=payload, headers=headers)
+            async with limiter, httpx.AsyncClient(**client_kwargs) as client:
+                resp = await client.post(url, json=payload, headers=headers)
             latency_ms = int((time.monotonic() - t0) * 1000)
         except httpx.TimeoutException as e:
             last_exc = e

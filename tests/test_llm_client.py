@@ -179,16 +179,21 @@ async def test_chat_completion_4xx_raises_without_retry(monkeypatch):
     assert calls["n"] == 1  # no retry on 4xx
 
 
-async def test_chat_completion_semaphore(monkeypatch):
+async def test_chat_completion_rate_limiter(monkeypatch):
+    """Verify internal rate limiter is used (env-configured, no external semaphore)."""
+    import trajlens.annotate.llm_client as mod
+    monkeypatch.setattr(mod, "_limiter", None)  # force re-init
+    monkeypatch.setenv("TRAJLENS_RPS", "20")
+    monkeypatch.setenv("TRAJLENS_MAX_CONCURRENCY", "2")
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={
             "choices": [{"message": {"content": "y"}}], "usage": {},
         })
 
     _patch_transport(monkeypatch, handler)
-    sem = asyncio.Semaphore(1)
     content, _ = await chat_completion(
-        _profile(), [{"role": "user", "content": "hi"}], semaphore=sem)
-
+        _profile(), [{"role": "user", "content": "hi"}])
     assert content == "y"
-    assert sem._value == 1  # released
+    assert mod._limiter is not None
+    assert mod._limiter._sem._value == 2  # released back to max

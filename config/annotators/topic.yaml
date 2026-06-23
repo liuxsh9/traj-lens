@@ -1,0 +1,7 @@
+id: topic
+type: llm
+target: session
+context: whole
+module: trajlens.annotate.llm.topic
+profile: default
+version: 4  # objective summary

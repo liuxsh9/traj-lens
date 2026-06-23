@@ -4,6 +4,7 @@ Cache-aware: skips (target, annotator, version) triples already in the DB, so
 re-runs after a version bump only fill the gaps. Errors are per-target, logged,
 and recorded on the job; one bad target never aborts the run.
 """
+import asyncio
 import importlib
 import json
 import logging
@@ -45,8 +46,12 @@ def _has_annotation(conn, target_hash, annotator_id, version) -> bool:
 
 async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
                         content_hashes=None, llm_profiles=None,
-                        semaphore=None, job_id=None) -> dict:
-    """Run `annotator_mod` over trajectories per `spec`. Returns {total, done, skipped, errors}."""
+                        job_id=None) -> dict:
+    """Run `annotator_mod` over trajectories per `spec`. Returns {total, done, skipped, errors}.
+
+    LLM annotators run concurrently (bounded by the rate limiter in llm_client).
+    Rule annotators stay serial (fast enough, simpler DB access).
+    """
     repo.register_annotator(conn, id=spec.id, version=spec.version, config_hash=spec.version)
     if job_id:
         repo.create_job(conn, job_id=job_id, annotator_id=spec.id)
@@ -65,6 +70,8 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
     total = done = skipped = 0
     errors: list[dict] = []
 
+    # Phase 1: enumerate all work items, do cache check + DB linking (serial, fast)
+    pending: list[tuple[str, str, list, list, str]] = []  # (ch, th, unit, messages_or_ctx, ih)
     for ch in content_hashes:
         traj = repo.get_trajectory(conn, ch)
         if traj is None:
@@ -80,28 +87,77 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
                 repo.link_annotation_target(
                     conn, target_hash=th, content_hash=ch,
                     target_type=spec.target.value, target_idx=idx)
-                conn.commit()  # close the implicit txn before put_annotation's BEGIN IMMEDIATE
+                conn.commit()
 
                 if spec.type == "rule":
+                    # rules are CPU-only, run inline
                     value = annotator_mod.annotate(unit, ctx)
+                    repo.put_annotation(
+                        conn, target_hash=th, annotator_id=spec.id,
+                        annotator_version=spec.version, value=value, inputs_hash=ih)
+                    done += 1
                 else:
                     messages = annotator_mod.build(unit, ctx)
-                    content, _usage = await chat_completion(
-                        profile, messages,
-                        json_schema=getattr(annotator_mod, "SCHEMA", None),
-                        semaphore=semaphore)
-                    value = annotator_mod.parse(content)
+                    pending.append((ch, th, unit, messages, ih))
+            except Exception as exc:  # noqa: BLE001
+                log.exception("annotator %s failed on target %s", spec.id, th)
+                errors.append({"content_hash": ch, "target_hash": th, "error": str(exc)})
 
+    # Phase 2: fire LLM calls concurrently, write results back serial
+    # ponytail: gather sends all at once; rate limiter in llm_client throttles to RPS/concurrency
+    if pending:
+        log.info("annotator %s: launching %d LLM calls concurrently", spec.id, len(pending))
+
+        async def _call_llm(messages):
+            content, _usage = await chat_completion(
+                profile, messages,
+                json_schema=getattr(annotator_mod, "SCHEMA", None))
+            return content
+
+        results = await asyncio.gather(
+            *[_call_llm(m) for (_, _, _, m, _) in pending],
+            return_exceptions=True)
+
+        for (ch, th, unit, messages, ih), result in zip(pending, results):
+            if isinstance(result, Exception):
+                log.exception("annotator %s failed on target %s: %s", spec.id, th, result)
+                errors.append({"content_hash": ch, "target_hash": th, "error": str(result)})
+                continue
+            try:
+                value = annotator_mod.parse(result)
                 repo.put_annotation(
                     conn, target_hash=th, annotator_id=spec.id,
                     annotator_version=spec.version, value=value, inputs_hash=ih)
                 done += 1
-            except Exception as exc:  # noqa: BLE001 — one bad target must not abort the run
-                log.exception("annotator %s failed on target %s", spec.id, th)
+            except Exception as exc:  # noqa: BLE001
+                log.exception("annotator %s parse failed on %s", spec.id, th)
                 errors.append({"content_hash": ch, "target_hash": th, "error": str(exc)})
+
+    # ponytail: invalidate cached metrics that depend on this annotator
+    if done > 0:
+        _invalidate_dependent_metrics(conn, spec.id)
 
     result = {"total": total, "done": done, "skipped": skipped, "errors": errors}
     if job_id:
         repo.update_job(conn, job_id, status="done", total=total, done=done,
                         errors=json.dumps(errors, ensure_ascii=False))
     return result
+
+
+def _invalidate_dependent_metrics(conn, annotator_id: str):
+    """Delete cached metrics that depend on the given annotator."""
+    try:
+        from trajlens.metrics import REGISTRY
+        import trajlens.metrics.builtins  # noqa: F401 — ensure registered
+        to_delete = [name for name, (_fn, _ver, deps) in REGISTRY.items()
+                     if annotator_id in deps]
+        if to_delete:
+            placeholders = ",".join("?" * len(to_delete))
+            n = conn.execute(
+                f"DELETE FROM metrics WHERE metric_id IN ({placeholders})", to_delete
+            ).rowcount
+            conn.commit()
+            log.info("invalidated %d cached metrics (%s) after %s run",
+                     n, ", ".join(to_delete), annotator_id)
+    except Exception:
+        log.debug("metric invalidation skipped (metrics module not available)")
