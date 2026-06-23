@@ -1,53 +1,43 @@
-import { useEffect, useState } from "react";
-import { listTrajectories, type TrajSummary } from "./api";
-import { TrajectoryView } from "./components/TrajectoryView";
+import { useState } from "react";
+import { DatasetWall } from "./components/DatasetWall";
+import { DatasetDetail } from "./components/DatasetDetail";
+import { TrajectoryViewer } from "./components/TrajectoryViewer";
+
+type View =
+  | { page: "datasets" }
+  | { page: "dataset"; id: string; name: string }
+  | { page: "trajectory"; hash: string; datasetId?: string; datasetName?: string };
 
 export function App() {
-  const [selected, setSelected] = useState<string | null>(null);
-  if (selected) {
-    return <TrajectoryView hash={selected} onBack={() => setSelected(null)} />;
+  const [view, setView] = useState<View>({ page: "datasets" });
+
+  if (view.page === "trajectory") {
+    return (
+      <TrajectoryViewer
+        hash={view.hash}
+        onBack={() =>
+          view.datasetId
+            ? setView({ page: "dataset", id: view.datasetId, name: view.datasetName || "" })
+            : setView({ page: "datasets" })
+        }
+      />
+    );
   }
-  return <ListView onOpen={setSelected} />;
-}
-
-function ListView({ onOpen }: { onOpen: (h: string) => void }) {
-  const [rows, setRows] = useState<TrajSummary[] | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    listTrajectories().then(setRows).catch((e) => setErr(String(e)));
-  }, []);
-
+  if (view.page === "dataset") {
+    return (
+      <DatasetDetail
+        datasetId={view.id}
+        datasetName={view.name}
+        onBack={() => setView({ page: "datasets" })}
+        onOpen={(hash) =>
+          setView({ page: "trajectory", hash, datasetId: view.id, datasetName: view.name })
+        }
+      />
+    );
+  }
   return (
-    <div className="page">
-      <h1>traj-lens</h1>
-      {err && <p className="error">{err}</p>}
-      {!rows && !err && <p className="dim">loading…</p>}
-      {rows && rows.length === 0 && (
-        <p className="dim">
-          no trajectories — ingest one with <code>trajlens ingest</code>
-        </p>
-      )}
-      {rows && rows.length > 0 && (
-        <table className="list">
-          <thead>
-            <tr>
-              <th>content_hash</th>
-              <th>items</th>
-              <th>created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.content_hash} onClick={() => onOpen(r.content_hash)}>
-                <td className="mono">{r.content_hash.slice(0, 16)}…</td>
-                <td>{r.items_count}</td>
-                <td className="dim">{r.created_at}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
+    <DatasetWall
+      onOpen={(id, name) => setView({ page: "dataset", id, name })}
+    />
   );
 }
