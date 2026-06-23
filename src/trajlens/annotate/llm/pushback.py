@@ -20,26 +20,34 @@ Pushback = the user resists, corrects, or redirects the agent IN RESPONSE TO wha
 
 Categories (choose exactly one):
 
-- correction — The user reacts to the agent's prior action by: correcting a misunderstanding, pointing out errors, providing missing context the agent should have known, or changing direction BECAUSE the agent went the wrong way.
-  KEY SIGNAL: the prompt references or implies something the agent did wrong or missed.
-  Examples: "I said X not Y", "you changed the wrong file", "actually the API uses POST not GET", "forget that approach, try Y", "on second thought skip the tests" (redirecting after seeing agent's plan), "install docker compose — right now it gives an error" (correcting a missing dependency the agent should have included)
+- correction — The user steers, redirects, or corrects the agent's course: correcting a misunderstanding, pointing out errors, providing missing context, changing direction after seeing agent output, or narrowing/expanding the scope of the task in response to what the agent produced.
+  KEY SIGNAL: the prompt responds to or builds on what the agent did, but adjusts course rather than accepting it as-is. This includes soft corrections like describing the desired behavior when the current result is wrong.
+  Examples: "I said X not Y", "you changed the wrong file", "actually the API uses POST not GET", "forget that approach, try Y", "on second thought skip the tests" (redirecting after seeing agent's plan), "the scroll lock should stay where the user left it, not reset to 0,0" (implying current behavior is wrong), "I want to simplify this code, can you look?" (requesting a different direction after seeing agent's output)
 
 - rejection — The user explicitly rejects, reverts, or refuses the agent's output WITHOUT providing a specific correction.
   Examples: "undo that", "revert the last change", "no", "that's wrong", "put it back the way it was"
 
-- failure_report — The user reports that the agent's output does not work: bugs, errors, test failures, broken behavior.
-  Examples: "this still doesn't work", "it's still crashing", "same error, try again", "the tests are failing"
+- failure_report — The user reports that something is wrong, broken, or not behaving as expected — whether or not they explicitly say "it doesn't work." This includes describing symptoms, pasting error messages, or showing unexpected output that implies the agent's work has a problem.
+  Examples: "this still doesn't work", "it's still crashing", "same error, try again", "the tests are failing", "每个部分都出现了两次" (describing a duplicate-rendering bug), "buffer-list-update-hook fires extremely often" (reporting a side effect of agent's change)
 
 - non_pushback — The prompt moves the session forward normally: a new task, a follow-up instruction, building on agent output, asking a question, continuing, or routine iteration. This is the DEFAULT when the prompt does not clearly react to a problem with the agent's prior action.
   Examples: "now add a login page", "good, also add unit tests", "continue", "change the button color to blue", "$commit", "cleanup these commits"
+  SPECIAL: system-generated interruptions like "[Request interrupted by user for tool use]" or "[Request interrupted by user]" are always non_pushback — they are automatic cancel signals, not user-authored pushback.
 
 Disambiguation:
-- correction vs non_pushback: If the prompt could be read as a standalone new instruction with no reference to the agent doing something wrong, choose non_pushback. Correction requires the user to be REACTING to the agent's prior action.
+- correction vs non_pushback: If there is NO preceding agent action in the context, or the prompt is entirely about a new unrelated topic, choose non_pushback. But if the agent just produced output and the user's next message adjusts, narrows, or redirects that work — even without explicitly saying "you did it wrong" — that is correction.
 - correction vs rejection: correction provides a specific fix or new direction; rejection just says "no"/"undo" without explaining what to do instead.
 - failure_report vs rejection: failure_report = "it doesn't work" (broken); rejection = "I don't want that" (unwanted even if functional).
 - Repeating a previous instruction verbatim or with minor edits is non_pushback (the user may be retrying or continuing), UNLESS the repetition explicitly references agent failure ("I already told you to...").
+- Preemptive instructions ≠ corrections: "Do NOT do X" or "Make sure to Y" in a new task description is a guardrail for future behavior, NOT a reaction to past mistakes. Only classify as correction if the agent ALREADY did the unwanted action and the user is telling it to stop. Example: user gives a task saying "Do NOT edit the plan file" — if the agent hasn't touched the plan file, this is non_pushback even though the language sounds corrective. The user is setting boundaries on a new task, not reacting to a mistake.
+- No prior agent action → always non_pushback: If the context shows no preceding assistant response or tool call, the user prompt cannot be pushback — it is starting a new task.
 
-When uncertain, lean toward non_pushback — pushback should be clear from the text.
+Key principle — implicit pushback: After an agent action, if the user describes a problem, unexpected behavior, or undesirable state WITHOUT explicitly blaming the agent, it is STILL pushback (failure_report or correction). The user doesn't need to say "you broke it" — describing the broken state is enough. Only default to non_pushback when the user's message is clearly about a NEW unrelated topic or there is no prior agent action.
+
+Think step by step:
+1. What did the agent just do? (Look at the preceding context.)
+2. Is the user's message ABOUT what the agent did, or about something new/unrelated?
+3. If about what the agent did: is it reporting a problem (failure_report), steering/adjusting (correction), rejecting (rejection)?
 
 Respond in valid JSON only:
 {"label": "<one of: correction, rejection, failure_report, non_pushback>", "reason": "<1-2 sentence explanation>"}"""

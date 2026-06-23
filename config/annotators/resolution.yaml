@@ -1,0 +1,6 @@
+id: resolution
+type: llm
+target: session
+context: whole
+module: trajlens.annotate.llm.resolution
+profile: default

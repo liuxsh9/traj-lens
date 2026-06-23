@@ -11,6 +11,20 @@ import yaml
 
 logger = logging.getLogger("trajlens.llm")
 
+
+def _load_dotenv(path: str = ".env") -> None:
+    """Load KEY=VALUE from .env into os.environ (no dep, no overwrite)."""
+    try:
+        for line in open(path):
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
+    except FileNotFoundError:
+        pass
+
+
 # Retry on rate limits, server errors, and timeouts. 4xx (except 429) is fatal.
 _BACKOFF = (0.5, 1.0, 2.0, 4.0)
 
@@ -29,6 +43,8 @@ class LLMProfile:
 
 def load_profiles(path: str = "config/llm_profiles.yaml") -> dict[str, LLMProfile]:
     """Load profiles from YAML, expanding ${ENV} references."""
+    # ponytail: load .env if present, no extra dep
+    _load_dotenv()
     with open(path) as f:
         raw = os.path.expandvars(f.read())
     data = yaml.safe_load(raw) or {}

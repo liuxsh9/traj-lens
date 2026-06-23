@@ -2,7 +2,7 @@
 
 > 基于设计文档 `docs/superpowers/specs/2026-06-21-traj-lens-design.md` 各章节逐项展开。
 > 每条对应设计中一个可交付能力，不是文件粒度。
-> 更新日期：2026-06-22（slice-2 收尾 + pushback 调优）
+> 更新日期：2026-06-22（slice-2 二次收尾：resolution 标注器 + prompt 调优 + 测试集扩充）
 
 ---
 
@@ -57,7 +57,7 @@
 ### CLI（§9.1）
 - [x] `trajlens ingest`（JSON 单对象 + JSONL）— `cli.py`
 - [x] `trajlens serve` — `cli.py`
-- [ ] `trajlens annotate` — slice 2
+- [x] `trajlens annotate <config.yaml>` — `cli.py`
 - [ ] `trajlens export` — slice 4
 
 ### Web — 最小线性 viewer（§12.2 A 层）
@@ -71,8 +71,8 @@
 ### 测试 & 样本
 - [x] core 单测：model / identity / grouping / registry — 12 tests
 - [x] adapter + store + api + cli 集成测 — 14 tests
-- [x] 真实数据样本语料（7 openai_messages + 5 swe_chat fixtures）— `tests/samples/`
-- [x] 兼容性回归 `test_samples.py`（全样本走 adapter→grouping→store 往返）— 12 tests
+- [x] 真实数据样本语料（9 openai_messages + 17 swe_chat fixtures, EN/ZH/KO/PT/RU）— `tests/samples/`
+- [x] 兼容性回归 `test_samples.py`（全样本走 adapter→grouping→store 往返）
 
 ---
 
@@ -119,6 +119,7 @@
 ### 首批标注器
 - [x] `loop_detect` rule 标注器（STEP 级，同文件编辑 ≥3）— `annotate/rules/loop_detect.py`
 - [x] `pushback` LLM 标注器（USER_TURN 级，correction/rejection/failure_report）— `annotate/llm/pushback.py`
+- [x] `resolution` LLM 标注器（SESSION 级，resolved/partially/unresolved/indeterminate）— `annotate/llm/resolution.py`
 
 ### API 扩展
 - [x] `POST /api/v1/jobs`（建标注任务，后台线程执行）— `routes.py`
@@ -267,10 +268,10 @@
 | 分类 | 总计 | 完成 | 进度 |
 |---|---|---|---|
 | Slice 1 骨架 | 35 | 34 | **97%** |
-| Slice 2 标注 | 27 | 24 | **89%** |
+| Slice 2 标注 | 28 | 26 | **93%** |
 | Slice 3 指标+浏览 | 10 | 0 | 0% |
 | Slice 4 挑数据闭环 | 14 | 0 | 0% |
 | 富 Viewer | 12 | 0 | 0% |
 | Slice 5 铺广度 | 12 | 3 | 25% |
 | 基础设施 | 12 | 8 | 67% |
-| **合计** | **122** | **69** | **57%** |
+| **合计** | **123** | **71** | **58%** |

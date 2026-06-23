@@ -1,0 +1,189 @@
+{
+  "session_id": "ses_35b66304fffevQvOY7DFX0mHiz",
+  "agent": "opencode",
+  "rows": [
+    {
+      "turn_type": "user_prompt",
+      "content": "do some research on  entire.io",
+      "annotation": {
+        "pushback": {
+          "label": "non_pushback"
+        }
+      }
+    },
+    {
+      "turn_type": "assistant_thinking",
+      "content": "**Planning company research approach**",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"query\": \"entire.io company\", \"search_depth\": \"advanced\", \"max_results\": 10, \"include_raw_content\": true}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"query\": \"Entire.io funding leadership customers\", \"search_depth\": \"advanced\", \"max_results\": 10, \"include_raw_content\": true}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"url\": \"https://entire.io\", \"format\": \"markdown\"}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "assistant_thinking",
+      "content": "**Refining search scope and sources**",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"query\": \"\\\"Entire\\\" \\\"Thomas Dohmke\\\" seed round Felicis\", \"search_depth\": \"advanced\", \"max_results\": 10, \"include_raw_content\": true}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"query\": \"site:github.com/entireio/cli Entire CLI checkpoints\", \"search_depth\": \"basic\", \"max_results\": 5, \"include_raw_content\": true}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"query\": \"site:entire.io/blog Entire Dispatch checkpoints codex cursor\", \"search_depth\": \"advanced\", \"max_results\": 10, \"include_raw_content\": true}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "assistant_thinking",
+      "content": "**Planning additional article fetch**",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"query\": \"TechCrunch Former GitHub CEO raises record $60M dev tool seed round at $300M valuation Entire\", \"search_depth\": \"advanced\", \"max_results\": 5, \"include_raw_content\": true}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"query\": \"GeekWire Entire Thomas Dohmke startup\", \"search_depth\": \"advanced\", \"max_results\": 5, \"include_raw_content\": true}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"query\": \"The New Stack interview Thomas Dohmke Entire\", \"search_depth\": \"advanced\", \"max_results\": 5, \"include_raw_content\": true}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "assistant_response",
+      "content": "🤖🎵\nHere’s a quick research brief on `entire.io` (the AI-native dev platform startup, not `every.io` or OpenAI’s `io` hardware company).\n\n**What It Is**\n- `entire.io` is a developer platform company founded by former GitHub CEO Thomas Dohmke.\n- Core thesis: existing SDLC tooling (issues/repos/PRs) is not designed for high-volume agent-generated code.\n- Positioning: “human + agent collaboration” with persistent, versioned reasoning/context, not just source diffs.\n- Public messaging centers on three layers: git-compatible data layer, semantic reasoning/context layer, and AI-native workflow UX.\n\n**Current Product (Shipping Now)**\n- First product is the open-source `Entire CLI` (`github.com/entireio/cli`), centered on “Checkpoints.”\n- Checkpoints capture agent session context (prompts, transcript, touched files, metadata) and link it to commits.\n- Metadata is stored on a separate branch (`entire/checkpoints/v1`) to keep normal commit history cleaner.\n- Current agent support includes Claude Code and Gemini CLI; more integrations are publicly stated as in progress.\n- Security docs emphasize best-effort secret redaction (entropy + gitleaks-style patterns) before writing checkpoint data.\n\n**Company/Funding Signals**\n- Launch and financing announced Feb 2026.\n- Reported round: `$60M` seed at roughly `$300M` valuation.\n- Reported investors include Felicis (lead), Madrona, M12, Basis Set, plus notable angels (e.g., Jerry Yang, Olivier Pomel, Garry Tan, Gergely Orosz, Theo Browne).\n- Team publicly described as remote-first and small (mid-teens at launch), with stated growth plans.\n\n**Why People Care**\n- Targets a real pain point in agentic coding: review/auditability of AI-generated changes.\n- Could be useful for compliance-heavy environments wanting stronger change provenance and session traceability.\n- Open-source CLI + Git-native workflow lowers adoption friction compared with fully hosted black-box tools.\n- Competitive angle is governance/context continuity, not “yet another coding assistant.”\n\n**Things To Watch / Due Diligence Questions**\n- Privacy model: session transcripts can include sensitive material; branch handling and repo visibility policies matter.\n- Operational overhead: extra metadata branches and hooks may complicate existing Git workflows in some orgs.\n- Ecosystem risk: major incumbents (GitHub, OpenAI, Anthropic, Google, Cursor) may ship overlapping features.\n- Product maturity: still early; claims are strong, but enterprise-scale proof points and case studies are limited so far.\n\nIf you want, I can do one of these next:\n1. A competitor matrix (`Entire` vs `Copilot` vs `Cursor` vs `Sourcegraph` style governance).\n2. A security/compliance deep dive on whether Checkpoints fits your SDLC controls.\n3. A practical pilot plan (how to evaluate `Entire CLI` in one repo with rollback criteria).",
+      "annotation": {}
+    },
+    {
+      "turn_type": "assistant_thinking",
+      "content": "**Organizing concise research summary**",
+      "annotation": {}
+    },
+    {
+      "turn_type": "user_prompt",
+      "content": "# Git Commit Conventional\n\n## Overview\n\nGenerate clear Conventional Commit messages, decide commit grouping, run commit-time checks, and create commit(s) safely.\n\n## Context Marker\n\nAlways begin your response with all active emoji markers, in the order they were introduced.\n\nFormat: `\"<marker1><marker2><marker3>\\n<response>\"`\n\nThe marker for this skill is: `🎯`\n\n## Workflow\n\n1. Inspect repository context:\n   - Run `git log -n 20 --pretty=format:%s` for subject style context only.\n   - Run `git status`.\n1. Select the diff to analyze:\n   - If staged changes exist, use `git diff --staged` and ignore unstaged changes.\n   - If nothing is staged, run `git diff` and ask whether to stage all or specific files before committing.\n1. Evaluate commit pressure using balanced thresholds:\n   - Count changed files and changed lines from the active diff context.\n   - Classify zone:\n     - `green`: `<=5` files and `<=150` changed lines.\n     - `yellow`: `6-12` files or `151-400` changed lines.\n     - `red`: `>12` files or `>400` changed lines.\n   - Apply zone behavior:\n     - `green`: proceed with normal commit boundary analysis.\n     - `yellow`: recommend splitting and record a risk note if user chooses a single commit.\n     - `red`: require a split plan before proceeding; only continue single-commit flow with explicit user override.\n1. Decide single versus multiple commits with an explicit framework:\n   - Check logical separation: split when changes serve multiple distinct goals.\n   - Check file-type mixing: split documentation changes from code changes when they can stand alone.\n   - Check implementation versus tests: split when test updates are independent from implementation updates.\n   - Check formatting versus logic: split formatting-only churn from behavior changes.\n   - Check dependencies versus behavior: split dependency and tooling updates from code behavior changes.\n   - Check mixed-purpose hunks in the same file: split by hunk when one file contains unrelated intents (for example, rename plus refactor).\n   - Check size and reviewability: consider splitting broad changes (for example, over roughly 150 changed lines) by module or feature.\n   - Check issue/feature boundaries: split when multiple bugs or features are addressed in one diff.\n   - Keep together when changes are small and focused on one purpose.\n   - Keep together when changes are tightly coupled and splitting would create non-functional or misleading history.\n   - Keep together when all changes are part of one coherent refactor.\n1. Stage changes intentionally for the selected commit boundary:\n   - Use `git add -p` to stage only relevant hunks when a file mixes logical changes.\n   - Use `git add -e` only when hunk editing is required and apply minimal edits.\n   - After staging, verify scope with `git diff --staged` and `git diff` before proceeding.\n   - If partial staging would create a broken intermediate commit, keep dependent hunks together.\n1. Run a concise quality review before committing:\n   - Check correctness, maintainability, security, performance, and tests.\n   - Classify findings by severity: Critical, High, Medium, Low.\n   - Present findings using this structure: Executive Summary; Issues by severity with file/line references; Suggested fixes with brief examples; Positive observations; Actionable next steps.\n   - If any Critical or High issue is found, stop and request explicit user confirmation before committing.\n1. If `.pre-commit-config.yaml` exists, run `pre-commit run`:\n   - Never bypass hooks.\n   - For trivial fixes, apply changes, restage files, and rerun hooks until they pass.\n   - For non-trivial fixes, present the proposed fix to the user and get approval before applying and proceeding.\n   - Treat formatting-only or whitespace-only hook edits as trivial auto-fixes.\n   - Track every auto-fixed file and the hook that changed it.\n1. Generate commit message(s) in strict Conventional Commit format:\n   - Subject must match `<type>(<scope>): <subject>` or `<type>: <subject>`.\n   - If subject format is invalid, regenerate until format is valid.\n   - Keep subject imperative and concise.\n   - If the change is breaking, use `Error executing command: Unclosed subshellBREAKING CHANGE: ...`).\n   - Include body to document context and rationale.\n   - Only exclude a body when the changes are very, very small.\n1. Apply AI attribution policy before each commit:\n   - Always include a footer-only `Co-Authored-By` attribution on agent-created commits.\n   - Never mention AI generation in the subject or body.\n   - Use best effort self-identification to determine AI name and email from runtime/model self-awareness metadata.\n   - If email is not readily available, use `no-reply@example.com`.\n   - If name is not readily available, use `AI Assistant`.\n   - Never block commit flow by asking the user for attribution identity.\n1. Use deterministic output contract for single-commit and multi-commit runs:\n   - Before committing, present `Commit Plan`:\n     - `commit_count`\n     - `threshold_zone_encountered`\n     - `boundaries_rationale`\n     - `scope_per_commit`\n   - Before each commit, present `Per-Commit Preview`:\n     - `index` (`i/N`)\n     - `staged_files`\n     - `subject`\n     - `body_present`\n     - `footers`\n     - `checks_to_run`\n   - After each commit, present `Per-Commit Result`:\n     - `hash`\n     - `subject`\n     - `hook_result`\n     - `auto_fix_files`\n\n1. Validate message format and create commit(s):\n   - Show generated message(s) in chat.\n   - Run `git commit` with the generated message(s).\n   - For multiple commits, stage the right files before each commit.\n   - In the final commit summary to the user, include:\n     - Ordered `<hash> <subject>` list.\n     - `Pre-commit changes` note:\n       - If auto-fixes were applied, list hook id(s) and file path(s).\n       - If none were applied, explicitly say `Pre-commit changes: none`.\n     - `ai_attribution_applied: yes/no`.\n     - `working_tree_status: clean/not clean`.\n\n## Mandatory Rules\n\n- Never use hook bypass flags such as `--no-verify` or `-n`.\n- Never commit when Critical or High review issues are present unless the user explicitly confirms.\n- Never include unrelated files in a commit.\n- Never stage an entire file when only some hunks belong to the current commit boundary.\n- Always report whether pre-commit auto-fixed files before finalizing the commit result message.\n\n## References\n\n- Conventional commit types, scopes, and templates: `references/conventional-commits.md`\n- Review severity rubric and reporting format: `references/review-guardrails.md`\n- Commit pressure zones and threshold behavior: `references/commit-hygiene-thresholds.md`\n- AI attribution policy for commits: `references/ai-attribution.md`\n\n\n\n\nI've initialized a setup of the entire cli in this repo. commit the changes. include a brief explanation about what entire is and how this is an experiment to test it out",
+      "annotation": {
+        "pushback": {
+          "label": "correction"
+        }
+      }
+    },
+    {
+      "turn_type": "assistant_thinking",
+      "content": "**Planning staged file inspection**",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"command\": \"git log -n 20 --pretty=format:%s\", \"description\": \"Shows recent commit subject lines\"}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"command\": \"git status\", \"description\": \"Shows repository working tree status\"}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "assistant_thinking",
+      "content": "**Analyzing staged diff for severity**",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"command\": \"git diff --staged\", \"description\": \"Shows staged changes for commit review\"}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"command\": \"git diff --staged --shortstat\", \"description\": \"Shows staged file and line counts\"}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "assistant_thinking",
+      "content": "**Evaluating commit risk and quality**",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"command\": \"if [ -f .pre-commit-config.yaml ]; then echo yes; else echo no; fi\", \"description\": \"Checks whether pre-commit config exists\"}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "assistant_thinking",
+      "content": "**Running pre-commit checks**",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"command\": \"pre-commit run\", \"description\": \"Runs all pre-commit hooks on staged files\"}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "assistant_response",
+      "content": "🤖🎵🎯\nCommit Plan\n- commit_count: 1\n- threshold_zone_encountered: yellow (5 files, 265 insertions)\n- boundaries_rationale: all staged changes are one coherent setup goal (`entire enable` bootstrap for Claude/Cursor/OpenCode plus `.entire` settings), so splitting would create artificial history.\n- scope_per_commit: `entire` setup/integration experiment configuration\n\nConcise Review\n- Executive Summary: Staged changes are consistent and low risk; they configure Entire hooks and metadata storage without touching application/runtime code paths.\n- Issues by severity: Critical: none; High: none; Medium: none; Low: none.\n- Suggested fixes: none required.\n- Positive observations: hooks are agent-specific and isolated; `.entire/.gitignore` avoids committing transient metadata/logs.\n- Actionable next steps: commit as one unit; validate by running one short agent session and confirming checkpoint branch behavior.\n\nGenerated Commit Message\n```text\nchore(entire): initialize Entire CLI setup for repo experiment\n\nEntire captures AI agent session context and links it to Git history to improve traceability.\nThis commit enables the generated hook/config files so we can run a lightweight experiment evaluating the workflow in this repository.\n\nCo-Authored-By: AI Assistant <no-reply@example.com>\n```\n\nPer-Commit Preview\n- index: 1/1\n- staged_files: `.claude/settings.json`, `.cursor/hooks.json`, `.entire/.gitignore`, `.entire/settings.json`, `.opencode/plugins/entire.ts`\n- subject: `chore(entire): initialize Entire CLI setup for repo experiment`\n- body_present: yes\n- footers: `Co-Authored-By: AI Assistant <no-reply@example.com>`\n- checks_to_run: `pre-commit run` (already passed)\n\nProceeding to create the commit now.",
+      "annotation": {}
+    },
+    {
+      "turn_type": "assistant_thinking",
+      "content": "**Preparing commit message plan**",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"command\": \"git commit -m \\\"chore(entire): initialize Entire CLI setup for repo experiment\\\" -m \\\"Entire captures AI agent session context and links it to Git history to improve traceability.\\nThis commit enables the generated hook/config files so we can run a lightweight experiment evaluating the workflow in this repository.\\n\\nCo-Authored-By: AI Assistant <no-reply@example.com>\\\"\", \"description\": \"Creates conventional commit with attribution footer\"}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "assistant_thinking",
+      "content": "**Fixing commit message line length**",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"command\": \"git commit -m \\\"chore(entire): initialize Entire CLI setup for repo experiment\\\" -m \\\"Entire captures AI agent session context and links it to Git history for\\nbetter traceability.\\nThis commit enables generated hook and config files so we can run a\\nlightweight experiment in this repository.\\n\\nCo-Authored-By: AI Assistant <no-reply@example.com>\\\"\", \"description\": \"Retries commit with wrapped conventional message\"}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "assistant_thinking",
+      "content": "**Checking working tree status**",
+      "annotation": {}
+    },
+    {
+      "turn_type": "tool_use",
+      "content": "{\"command\": \"git status --short\", \"description\": \"Checks whether working tree is clean\"}",
+      "annotation": {}
+    },
+    {
+      "turn_type": "assistant_response",
+      "content": "🤖🎵🎯\nCommitted successfully with a Conventional Commit and your requested context about Entire + experiment intent.\n\nPer-Commit Result\n- hash: `1414f78`\n- subject: `chore(entire): initialize Entire CLI setup for repo experiment`\n- hook_result: passed (after one failed attempt due `body-max-line-length`, then retried with wrapped body)\n- auto_fix_files: none\n\nGenerated commit message\n```text\nchore(entire): initialize Entire CLI setup for repo experiment\n\nEntire captures AI agent session context and links it to Git history for\nbetter traceability.\nThis commit enables generated hook and config files so we can run a\nlightweight experiment in this repository.\n\nCo-Authored-By: AI Assistant <no-reply@example.com>\n```\n\nFinal commit summary\n- `1414f78 chore(entire): initialize Entire CLI setup for repo experiment`\n- Pre-commit changes: none\n- ai_attribution_applied: yes\n- working_tree_status: clean",
+      "annotation": {}
+    },
+    {
+      "turn_type": "assistant_thinking",
+      "content": "**Preparing final concise summary**",
+      "annotation": {}
+    }
+  ]
+}
