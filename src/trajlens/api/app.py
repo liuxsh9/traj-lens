@@ -13,9 +13,12 @@ WEB_DIST = pathlib.Path(__file__).resolve().parent.parent.parent.parent / "web" 
 
 def create_app(db_path: str = "trajlens.db", blob_dir: str = "blobs") -> FastAPI:
     app = FastAPI(title="traj-lens", version="0.0.1")
+    # Migrate once at startup
     conn = dbmod.connect(db_path)
     dbmod.migrate(conn)
-    app.state.conn = conn
+    conn.close()
+    # Store path — routes create per-request connections (SQLite conn is not thread-safe)
+    app.state.db_path = db_path
     app.state.blob_dir = blob_dir
     app.include_router(router)
     _mount_web(app)

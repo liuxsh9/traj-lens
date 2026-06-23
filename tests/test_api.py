@@ -36,7 +36,7 @@ def test_ingest_is_idempotent(tmp_path):
     h1 = c.post("/api/v1/trajectories", json=raw).json()["content_hash"]
     h2 = c.post("/api/v1/trajectories", json=raw).json()["content_hash"]
     assert h1 == h2
-    assert len(c.get("/api/v1/trajectories").json()) == 1
+    assert c.get("/api/v1/trajectories").json()["total"] == 1
 
 
 def test_get_missing_404(tmp_path):
