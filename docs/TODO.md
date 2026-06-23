@@ -2,7 +2,7 @@
 
 > 基于设计文档 `docs/superpowers/specs/2026-06-21-traj-lens-design.md` 各章节逐项展开。
 > 每条对应设计中一个可交付能力，不是文件粒度。
-> 更新日期：2026-06-22（slice-2 二次收尾：resolution 标注器 + prompt 调优 + 测试集扩充）
+> 更新日期：2026-06-23（slice-4 数据集管理+统计+导出 + slice-3 收尾 + 富 Viewer + runner 并发）
 
 ---
 
@@ -97,7 +97,7 @@
 - [x] annotation CRUD（put 幂等 / get / query by target+annotator+version）— `repo.py`
 
 ### Runner（§7.3）
-- [x] 幂等并发 runner（按 target 枚举、按 context 投影、cache hit 跳过）— `runner.py`
+- [x] 幂等并发 runner（按 target 枚举、按 context 投影、cache hit 跳过、asyncio.gather 并发 LLM）— `runner.py`
 - [x] `jobs` 表 + 进度/错误追踪
 - [x] 失败隔离（FatalError 记录，不中断批次）
 - [x] §10.C.8 单写者纪律（`BEGIN IMMEDIATE` + `put_annotation`）
@@ -120,6 +120,7 @@
 - [x] `loop_detect` rule 标注器（STEP 级，同文件编辑 ≥3）— `annotate/rules/loop_detect.py`
 - [x] `pushback` LLM 标注器（USER_TURN 级，correction/rejection/failure_report）— `annotate/llm/pushback.py`
 - [x] `resolution` LLM 标注器（SESSION 级，resolved/partially/unresolved/indeterminate）— `annotate/llm/resolution.py`
+- [x] `topic` LLM 标注器（SESSION 级，中文标题+客观摘要+类型标签）— `annotate/llm/topic.py`
 
 ### API 扩展
 - [x] `POST /api/v1/jobs`（建标注任务，后台线程执行）— `routes.py`
@@ -141,70 +142,99 @@
 ## Slice 3 — 指标 + 浏览（§9.4.3）
 
 ### 指标（§5.2 ⑥）
-- [ ] metric 接口 + 注册表
-- [ ] 内置 metrics：pushback_count / turn_count / step_count / tool_count
-- [ ] session-level success 评分（LLM judge，depends_on pushback）
+- [x] metric 接口 + 注册表 — `metrics/__init__.py`（decorator registry + compute_metrics runner）
+- [x] 内置 metrics：pushback_count / turn_count / step_count / tool_count — `metrics/builtins.py`
+- [x] session-level success 评分（rule-based: resolution baseline − pushback penalty）— `metrics/builtins.py:success_score`
 - [ ] 效率指标（token/cost per 100 committed lines）— 需 artifacts
 - [ ] 安全指标（Semgrep diff）— 需 artifacts
-- [ ] `metrics` 表 migration + CRUD
-- [ ] §4.3 指标 provenance + 陈旧感知
+- [x] `metrics` 表 migration + CRUD — `003_metrics.sql` + `repo.py`
+- [x] §4.3 指标 provenance + 陈旧感知 — `_effective_version` compound key（metric version + dep annotator versions），自动检测依赖变更并 recompute
+- [x] 标注完成后自动失效依赖指标缓存 — `runner.py:_invalidate_dependent_metrics`
 
 ### 列表浏览
-- [ ] API：`GET /api/v1/trajectories?filter=&sort=&page=`（join metrics+annotations）
-- [ ] Web：TanStack Table 排序/筛选/分页
-- [ ] Web：TanStack Query 替换手写 fetch（此时 >2 个端点，值得引入）
+- [x] API：`GET /api/v1/trajectories` 返回 metrics + session annotations — `routes.py`
+- [x] Web：TanStack Table 排序/筛选/分页 — `App.tsx`（client-side sort + resolution filter）
+- [x] Web：TanStack Query 替换手写 fetch — `main.tsx` QueryClientProvider
+
+### CLI
+- [x] `trajlens metrics` — 计算所有轨迹的指标 — `cli.py`
 
 ---
 
-## Slice 4 — 挑数据闭环（§9.4.4）
+## Slice 4 — 数据集管理 + 导入导出闭环（§8 + §9.4.4）
 
-### 选择（§8.1）
-- [ ] `Selection` 模型（predicate + pinned_versions + members）
-- [ ] 结构化过滤谓词 → SQLite 查询
-- [ ] A/B/C 三类预设配方
+### 数据集管理
+- [x] Dataset / Batch 数据模型 + migration — `004_datasets.sql`
+- [x] Dataset CRUD（create / get / list / delete）— `repo.py`
+- [x] Batch CRUD + put_trajectory 归批 — `repo.py`
+- [x] `detect_and_parse` 返回格式名 → batch.format — `adapters/__init__.py`
+- [x] CLI `ingest --dataset` 自动建数据集+批次 — `cli.py`
+- [x] API 数据集端点（POST/GET/DELETE datasets, GET batches）— `routes.py`
+- [x] Web 三层导航：Dataset Wall → Dataset Detail → Trajectory Viewer — `App.tsx`
+- [x] Dataset 卡片墙首页 — `DatasetWall.tsx`
+- [x] Dataset 详情页（header + batch chips + 列表）— `DatasetDetail.tsx`
+- [x] 按数据集过滤轨迹（query_trajectories 支持 dataset_id 作用域）— `repo.py`
+
+### 统计仪表板
+- [x] 数据集聚合统计查询（指标汇总 + resolution 分布 + tags + 批次对比）— `repo.py:get_dataset_stats`
+- [x] 统计 API 端点 — `GET /api/v1/datasets/{id}/stats`
+- [x] Web 统计面板（摘要卡片 + resolution 分布条 + 指标概览 + tags）— `DatasetDetail.tsx:StatsPanel`
 
 ### 裁剪（§8.2–8.3）
-- [ ] `validate_trim(traj, a, b)` 四条校验（R1 边界 / R2 工具配对 / R3 上文完整 / R4 结尾可训）
+- [x] `validate_trim(items, start, end)` R1–R4 四条校验 — `export/trim.py`
 - [ ] §10.A.1 R3 续接守卫增强（非续接 or turn0 自足）
 - [ ] mask（per-atom weight=0，导出时写入，不改 canonical）
 - [ ] trim + mask 叠加
+
+### 导出器（§8.5–8.6）
+- [x] exporter 注册表 — `export/__init__.py`
+- [x] panguml2 SFT jsonl 导出器（字节保真 + 转换 fallback）— `export/panguml2.py`
+- [x] `ExportArtifact` 追溯 — `005_exports.sql` + `repo.py`
+- [x] provenance 写入 panguml2 `meta_info`（content_hash + export_mode）
+- [ ] 偏好对 jsonl 导出器
+
+### 选择（§8.1）
+- [ ] `Selection` 模型（predicate + pinned_versions + members）
+- [ ] A/B/C 三类预设配方
 
 ### 偏好对（§8.4）
 - [ ] B 类构造：shared_prefix / rejected / chosen / correction_text
 - [ ] continuation 过滤守卫（turn_number > 首个 agent 行为）
 
-### 导出器（§8.5–8.6）
-- [ ] exporter 注册表
-- [ ] panguml2 SFT jsonl 导出器（字节保真模式）
-- [ ] 偏好对 jsonl 导出器
-- [ ] `ExportArtifact` 追溯（selection + trim_spec + exporter + pinned_versions）
-- [ ] provenance 写入 panguml2 `meta_info`
-
 ### API + CLI
-- [ ] `POST /api/v1/exports`
-- [ ] `trajlens export` CLI
+- [x] `POST /api/v1/exports` — `routes.py`
+- [x] `trajlens export <dataset>` CLI — `cli.py`
 
 ### Web
 - [ ] viewer 内 trim/mask 交互（左缘勾选 + 底部 R1–R4 实时校验）
+- [ ] 导出按钮 + 进度（DatasetDetail 内）
 
 ---
 
 ## 富 Viewer — B+C hybrid（§12，在 slice 2 之后自成切片）
 
 ### 布局
-- [ ] minimap 左栏（每 atom 一 tick / >200 聚合成每 step 一格）
-- [ ] 折叠 step 卡（信号头：actor + 摘要 + 工具足迹 chip）
-- [ ] run group 可整体折叠（run 头：步数/工具数/error-recovery/loop）
-- [ ] 展开 = typed-item 转录（A 层复用）
+- [x] minimap 左栏（每 atom 一 tick，pushback flag 标记）— `Minimap.tsx`
+- [x] 折叠 step 卡（信号头：actor + 摘要 + 工具足迹 tool→tool→tool chain）— `CardStack.tsx`
+- [x] run group 可整体折叠（run 头：步数 + 工具 chain）— `CardStack.tsx`
+- [x] 展开 = typed-item 转录（A 层复用）— `ItemTranscript.tsx`
+- [x] pinned bookend：顶部 TASK（首条 user）+ 底部 REPLY（末条 assistant），可折叠 — `CardStack.tsx`
 
 ### 折叠策略（§12.5）
-- [ ] user 总展开；assistant step 默认折叠
-- [ ] pushback / analyzer-flag 的步自动展开
+- [x] run 展开、step 默认折叠；折叠全部只折叠 step 不折叠 run — `TrajectoryViewer.tsx`
+- [x] pushback user turn 红色高亮 + chip 标注 — `CardStack.tsx`
 
 ### 标注叠加（§12.6）
+- [x] pushback turn chip（category 标签）— `CardStack.tsx`
+- [x] session header 显示 topic 标题/摘要/tags + 分数/指标 — `SessionHeader.tsx`
+- [x] topic LLM 标注器（中文标题+摘要+类型标签）— `annotate/llm/topic.py`
 - [ ] turn/step chip 带 @version
-- [ ] session header 显示 success/efficiency/safety
 - [ ] 陈旧 badge（`v2 ready → 刷新？`）
+
+### 列表浏览增强
+- [x] 轨迹列显示 topic 标题 + hash + tags — `ListView.tsx`
+- [x] 多维度筛选器（resolution / score / pushback / turn count）— `ListView.tsx`
+- [x] 分页 + 排序 — `ListView.tsx`
 
 ### trim/mask 交互（§12.7）
 - [ ] 左缘勾选选区 + 底部 R1–R4 实时校验
@@ -234,7 +264,13 @@
 - [ ] §10.B.4 artifacts 表实装
 - [ ] code-survival metric（行级人/机归因，需 commit 输入）
 - [ ] committed lines 计数（效率分母）
-- [ ] Semgrep pre/post 安全扫描
+- [ ] Semgrep pre/post 安全扫描（agent 引入漏洞数 = post findings − pre baseline）
+
+### 工具调用代码可观测（从轨迹中提取代码变更）
+- [ ] 从 function_call（write/edit/bash）中提取代码 diff / 配置变更
+- [ ] Semgrep 对提取的代码片段做安全扫描（不依赖 artifacts，直接分析轨迹内工具输出）
+- [ ] HTML/SVG/Mermaid 等可视化语言外置预览（viewer 内 iframe sandbox 渲染）
+- [ ] 代码变更时间线（哪个 step 改了哪个文件，变更类型分类：新建/修改/删除/配置）
 
 ### 可集成性（§11）
 - [ ] API-key 可选鉴权
@@ -268,10 +304,10 @@
 | 分类 | 总计 | 完成 | 进度 |
 |---|---|---|---|
 | Slice 1 骨架 | 35 | 34 | **97%** |
-| Slice 2 标注 | 28 | 26 | **93%** |
-| Slice 3 指标+浏览 | 10 | 0 | 0% |
-| Slice 4 挑数据闭环 | 14 | 0 | 0% |
-| 富 Viewer | 12 | 0 | 0% |
-| Slice 5 铺广度 | 12 | 3 | 25% |
+| Slice 2 标注 | 29 | 28 | **97%** |
+| Slice 3 指标+浏览 | 12 | 10 | **83%** |
+| Slice 4 数据集+导出 | 22 | 16 | **73%** |
+| 富 Viewer | 17 | 13 | **76%** |
+| Slice 5 铺广度 | 16 | 3 | 19% |
 | 基础设施 | 12 | 8 | 67% |
-| **合计** | **123** | **71** | **58%** |
+| **合计** | **143** | **112** | **78%** |
