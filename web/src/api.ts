@@ -228,6 +228,27 @@ export async function getTrajectory(hash: string): Promise<Trajectory> {
   return r.json();
 }
 
+export interface SemgrepFinding {
+  item_idx: number;
+  check_id: string;
+  severity: string;
+  message: string;
+  line: number | null;
+}
+
+export interface SemgrepResult {
+  available: boolean;
+  scanned: number;
+  findings: SemgrepFinding[];
+  error?: string;
+}
+
+export async function scanSemgrep(hash: string): Promise<SemgrepResult> {
+  const r = await fetch(`/api/v1/trajectories/${hash}/semgrep`, { method: "POST" });
+  if (!r.ok) throw new Error(`semgrep scan failed: ${r.status}`);
+  return r.json();
+}
+
 // ── Grouping helpers (frontend projection from backend-tagged items) ──
 
 export interface TurnGroup {

@@ -77,6 +77,17 @@ def get_one(content_hash: str, conn: sqlite3.Connection = Depends(_conn)):
     return result
 
 
+@router.post("/api/v1/trajectories/{content_hash}/semgrep")
+def scan_semgrep(content_hash: str, conn: sqlite3.Connection = Depends(_conn)):
+    """On-demand Semgrep scan of code extracted from this trajectory's tool calls.
+    Returns {available, scanned, findings}; available=False if semgrep isn't installed."""
+    traj = repo.get_trajectory(conn, content_hash)
+    if traj is None:
+        raise HTTPException(status_code=404, detail="not found")
+    from trajlens.core.semgrep_scan import scan_changes
+    return scan_changes(traj.items)
+
+
 @router.post("/api/v1/jobs")
 def create_job(request: Request, body: dict = Body(...),
                conn: sqlite3.Connection = Depends(_conn)):

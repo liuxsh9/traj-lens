@@ -27,6 +27,21 @@ def test_classifies_edit_create_run_and_skips_reads():
     assert chs[1].old is None  # create has no "before"
 
 
+def test_bash_rm_classified_as_delete_compound_stays_run():
+    items = [
+        FunctionCallItem(name="bash", call_id="1",
+                         arguments=json.dumps({"command": "rm -rf build/old.py"})),
+        FunctionCallItem(name="bash", call_id="2",
+                         arguments=json.dumps({"command": "touch new.txt"})),
+        FunctionCallItem(name="bash", call_id="3",
+                         arguments=json.dumps({"command": "rm a.py && echo ok"})),
+    ]
+    chs = extract_changes(items)
+    assert (chs[0].op, chs[0].path) == ("delete", "build/old.py")
+    assert (chs[1].op, chs[1].path) == ("create", "new.txt")
+    assert chs[2].op == "run"  # compound -> not reclassified
+
+
 def test_bad_arguments_dont_crash():
     items = [FunctionCallItem(name="edit", call_id="x", arguments="not json")]
     assert extract_changes(items) == []

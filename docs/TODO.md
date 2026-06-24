@@ -272,9 +272,9 @@
 ### 工具调用代码可观测（从轨迹中提取代码变更）
 - [x] 从 function_call（write/edit/bash）中提取代码 diff — `core/code_changes.py`（读时投影，复用 tool_aliases；str_replace_editor command 子类型分流；codex shell_command 别名补全）
 - [x] 代码变更时间线（哪个 step 改了哪个文件 + old→new diff 片段）— `ChangesPanel.tsx`，API 详情叠加 `code_changes`
-- [ ] 变更类型细分：delete/config（当前 bash 统一 op=run，rm/mv/touch 嗅探留作升级路径）
-- [ ] Semgrep 对提取的代码片段做安全扫描（不依赖 artifacts，直接分析轨迹内工具输出）
-- [ ] HTML/SVG/Mermaid 等可视化语言外置预览（viewer 内 iframe sandbox 渲染）
+- [x] 变更类型细分：delete（bash 单命令 rm/rmdir/unlink→delete、touch→create；复合命令保持 run）— `code_changes._bash_op`；config 按扩展名归类暂缓
+- [x] Semgrep 对提取的代码片段做安全扫描（优雅可选：semgrep CLI 在则扫，不在则 available:false）— `core/semgrep_scan.py` + `POST /trajectories/{hash}/semgrep` + ChangesPanel「安全扫描」按钮
+- [x] HTML/SVG iframe sandbox 预览（ChangesPanel「预览」按钮，sandbox="" 静态渲染）— Mermaid 暂缓（需 mermaid.js 依赖）
 
 ### 可集成性（§11）
 - [ ] API-key 可选鉴权

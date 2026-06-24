@@ -146,10 +146,18 @@ if __name__ == "__main__":
         # read -> skipped
         FunctionCallItem(name="read", call_id="5",
                          arguments=json.dumps({"file_path": "/c.py"})),
+        # bash rm -> delete with path
+        FunctionCallItem(name="bash", call_id="6",
+                         arguments=json.dumps({"command": "rm -rf /tmp/old.py"})),
+        # compound rm -> stays run (don't trust shell side-effects)
+        FunctionCallItem(name="bash", call_id="7",
+                         arguments=json.dumps({"command": "rm a.py && echo done"})),
     ]
     chs = extract_changes(items)
-    assert len(chs) == 3, [c.op for c in chs]
+    assert len(chs) == 5, [c.op for c in chs]
     assert chs[0].op == "edit" and chs[0].path == "/a.py" and chs[0].new == "y"
     assert chs[1].op == "create" and chs[1].path == "/b.py" and chs[1].old is None
     assert chs[2].op == "run" and chs[2].command == "pytest -q" and chs[2].tool == "bash"
+    assert chs[3].op == "delete" and chs[3].path == "/tmp/old.py"
+    assert chs[4].op == "run"  # compound command not reclassified
     print("ok:", [(c.op, c.tool, c.path or c.command) for c in chs])
