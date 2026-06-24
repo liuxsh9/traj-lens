@@ -22,6 +22,8 @@ _load_dotenv()
 
 _DB = os.environ.get("TRAJLENS_DB", "trajlens.db")
 _BLOBS = os.environ.get("TRAJLENS_BLOBS", "blobs")
+_HOST = os.environ.get("TRAJLENS_HOST", "127.0.0.1")  # 0.0.0.0 to allow LAN/server access
+_PORT = int(os.environ.get("TRAJLENS_PORT", "8000"))
 
 app = typer.Typer(help="traj-lens CLI")
 
@@ -230,9 +232,13 @@ def export(
 
 
 @app.command()
-def serve(host: str = "127.0.0.1", port: int = 8000, db: str = _DB, blob_dir: str = _BLOBS,
+def serve(host: str = _HOST, port: int = _PORT, db: str = _DB, blob_dir: str = _BLOBS,
           reload: bool = False):
-    """Run the API + web viewer. Pass --reload for dev (auto-restart on code edits)."""
+    """Run the API + web viewer. Pass --reload for dev (auto-restart on code edits).
+
+    Host/port default from TRAJLENS_HOST/TRAJLENS_PORT in .env; set host=0.0.0.0
+    to expose on a LAN/server. CLI flags override .env.
+    """
     import uvicorn
     os.environ["TRAJLENS_DB"] = db
     os.environ["TRAJLENS_BLOBS"] = blob_dir
