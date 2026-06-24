@@ -11,6 +11,38 @@ def _client(tmp_path):
     return TestClient(app)
 
 
+def test_upload_done_survives_metric_failure(tmp_path, monkeypatch):
+    """Regression: a crash in the post-insert metric loop must not un-'done' an
+    upload whose rows already landed. Pre-fix, status="done" was set AFTER the
+    (minutes-long) compute_metrics loop with no guard, so any metric error
+    flipped the job to "error" and the data looked lost until a manual refresh."""
+    import time
+    import trajlens.metrics as metrics
+
+    monkeypatch.setattr(metrics, "compute_metrics",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    c = _client(tmp_path)
+    ds = c.post("/api/v1/datasets", json={"name": "up"}).json()
+    obj = json.loads((FIXTURES / "panguml2_weather.json").read_text())
+    body = json.dumps(obj) + "\n"
+
+    jid = c.post(f"/api/v1/datasets/{ds['id']}/upload",
+                 files={"file": ("u.jsonl", body.encode(), "application/x-ndjson")}).json()["job_id"]
+
+    for _ in range(50):
+        time.sleep(0.1)
+        j = c.get(f"/api/v1/jobs/{jid}").json()
+        if j["status"] != "pending":
+            break
+    else:
+        raise AssertionError("upload job never finished")
+
+    assert j["status"] == "done"   # data landed → done, despite the metric crash
+    assert j["done"] == 1
+    assert c.get(f"/api/v1/datasets/{ds['id']}/trajectories").json()["total"] == 1
+
+
 def test_health(tmp_path):
     c = _client(tmp_path)
     assert c.get("/api/health").json() == {"status": "ok"}

@@ -127,10 +127,11 @@ function UploadZone({ datasetId, onDone }: { datasetId: string; onDone: () => vo
       // Poll the background ingest job until it finishes (server streams the
       // file to disk and parses in a worker thread — never blocks).
       let j = job;
+      let pollFails = 0;  // a saturated server (big import) drops the odd poll — don't abort on one
       while (j.status === "pending" && j.job_id) {
         await new Promise((r) => setTimeout(r, 1000));
-        try { j = await getJob(j.job_id); }
-        catch { j = { ...j, status: "error" }; }
+        try { j = await getJob(j.job_id); pollFails = 0; }
+        catch { if (++pollFails >= 5) j = { ...j, status: "error" }; }
         setProgress(j);
       }
       const errs = j.errors ? (() => { try { return JSON.parse(j.errors!).length; } catch { return 0; } })() : 0;

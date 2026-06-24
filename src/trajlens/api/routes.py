@@ -390,16 +390,25 @@ def upload_to_dataset(
             if batch:
                 repo.update_batch_count(bg, batch["id"], done)
 
+            # Report done as soon as the rows are queryable — same lesson as
+            # 88f1b40 for the annotation runner. On a 3000-line upload the
+            # compute_metrics loop below takes minutes; blocking status="done"
+            # behind it kept the UI poller spinning, and a single timed-out
+            # poll aborted the client loop mid-import (showing a partial count).
+            repo.update_job(bg, job_id, status="done", done=done, skipped=skipped,
+                            errors=json.dumps(errors[:50], ensure_ascii=False))
+
             # structural metrics (turns/steps/tools) so list columns aren't 0;
-            # annotation-dependent metrics stay None until annotators run.
+            # annotation-dependent metrics stay None until annotators run. A
+            # metric failure must never un-'done' an import whose data landed.
             if hashes:
                 from trajlens.metrics import compute_metrics
                 import trajlens.metrics.builtins  # noqa: F401 — ensure registered
                 for ch in hashes:
-                    compute_metrics(bg, ch)
-
-            repo.update_job(bg, job_id, status="done", done=done, skipped=skipped,
-                            errors=json.dumps(errors[:50], ensure_ascii=False))
+                    try:
+                        compute_metrics(bg, ch)
+                    except Exception:  # noqa: BLE001 — metrics self-refresh on staleness
+                        pass
         except Exception as exc:  # noqa: BLE001 — otherwise job stays 'pending' forever
             repo.update_job(bg, job_id, status="error",
                             errors=json.dumps([{"error": str(exc)}], ensure_ascii=False))
