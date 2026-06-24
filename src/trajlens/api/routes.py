@@ -108,6 +108,55 @@ def scan_semgrep(content_hash: str, force: bool = False,
     return res
 
 
+@router.post("/api/v1/datasets/{dataset_id}/semgrep")
+def scan_dataset(dataset_id: str, request: Request,
+                 conn: sqlite3.Connection = Depends(_conn)):
+    """Background batch Semgrep scan of every trajectory in a dataset. semgrep is
+    slow (network rule fetch), so this runs as a job the UI polls — like the
+    annotator runner. Cache-aware: trajectories whose stored scan matches the
+    current ruleset version are skipped, so re-runs are near-instant."""
+    from trajlens.core.semgrep_scan import semgrep_available, ruleset_version, scan_changes
+    if not semgrep_available():
+        raise HTTPException(status_code=400, detail="semgrep not installed")
+
+    job_id = uuid.uuid4().hex[:12]
+    repo.create_job(conn, job_id=job_id, annotator_id="semgrep")
+    hashes = [t["content_hash"] for t in repo.list_trajectories(conn, dataset_id=dataset_id)]
+    repo.update_job(conn, job_id, total=len(hashes))
+    db_path = request.app.state.db_path
+
+    def _run():
+        bg = dbmod.connect(db_path)
+        cur = ruleset_version()
+        done = skipped = 0
+        errors: list[dict] = []
+        try:
+            for ch in hashes:
+                prev = repo.get_security_scan(bg, ch)
+                if prev and prev["ruleset_version"] == cur:
+                    skipped += 1
+                else:
+                    traj = repo.get_trajectory(bg, ch)
+                    res = scan_changes(traj.items)
+                    if res.get("available") and "error" not in res:
+                        repo.put_security_scan(bg, content_hash=ch, findings=res["findings"],
+                                               scanned=res["scanned"],
+                                               ruleset_version=res.get("ruleset_version", cur))
+                    else:
+                        errors.append({"content_hash": ch, "error": res.get("error", "scan failed")})
+                done += 1
+                repo.update_job(bg, job_id, done=done, skipped=skipped)
+            repo.update_job(bg, job_id, status="done", done=done, skipped=skipped,
+                            errors=json.dumps(errors, ensure_ascii=False))
+        except Exception as exc:  # noqa: BLE001
+            repo.update_job(bg, job_id, status="error", errors=json.dumps([{"error": str(exc)}]))
+        finally:
+            bg.close()
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"job_id": job_id, "annotator_id": "semgrep", "status": "pending"}
+
+
 @router.post("/api/v1/jobs")
 def create_job(request: Request, body: dict = Body(...),
                conn: sqlite3.Connection = Depends(_conn)):

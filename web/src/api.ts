@@ -148,6 +148,7 @@ export interface DatasetStats {
   resolution: Record<string, number>;
   top_tags: { tag: string; count: number }[];
   batches: Batch[];
+  security?: { scanned: number; introduced: number; affected: number };
 }
 
 export async function getDatasetStats(datasetId: string): Promise<DatasetStats> {
@@ -203,6 +204,13 @@ export async function computeMetrics(datasetId?: string): Promise<{ computed: nu
     body: JSON.stringify(datasetId ? { dataset_id: datasetId } : {}),
   });
   if (!r.ok) throw new Error(`compute metrics failed: ${r.status}`);
+  return r.json();
+}
+
+// Background batch semgrep scan of a dataset — returns a job to poll (like annotators).
+export async function scanDataset(datasetId: string): Promise<JobInfo> {
+  const r = await fetch(`/api/v1/datasets/${datasetId}/semgrep`, { method: "POST" });
+  if (!r.ok) throw new Error(`scan dataset failed: ${r.status}`);
   return r.json();
 }
 

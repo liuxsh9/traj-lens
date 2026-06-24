@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   listBatches, getDatasetStats, listAnnotators, uploadToDataset,
-  createJob, getJob, computeMetrics,
+  createJob, getJob, computeMetrics, scanDataset,
   type Batch, type DatasetStats, type AnnotatorInfo, type JobInfo,
 } from "../api";
 import { ListView } from "./ListView";
@@ -34,6 +34,17 @@ function StatsPanel({ stats }: { stats: DatasetStats }) {
           <div className="stat-value">{stats.metrics.success_score?.avg ?? "—"}</div>
           <div className="dim" style={{ fontSize: 11 }}>avg score</div>
         </div>
+        {stats.security && stats.security.scanned > 0 && (
+          <div className="stat-card">
+            <div className="stat-value" style={{ color: stats.security.introduced > 0 ? "var(--bad)" : "var(--good)" }}>
+              {stats.security.introduced}
+            </div>
+            <div className="dim" style={{ fontSize: 11 }}>引入漏洞</div>
+            <div className="dim" style={{ fontSize: 10, marginTop: 2 }}>
+              {stats.security.affected} 轨迹 · 已扫 {stats.security.scanned}/{stats.total}
+            </div>
+          </div>
+        )}
         <div className="stat-card" style={{ flex: 2 }}>
           <div className="dim" style={{ fontSize: 11, marginBottom: 4 }}>resolution</div>
           <div className="res-bar">
@@ -236,10 +247,19 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
       const jobs = results
         .filter((r): r is PromiseFulfilledResult<JobInfo> => r.status === "fulfilled")
         .map((r) => r.value);
+      // semgrep batch scan rides along — it's a job too (skipped if not installed)
+      try { jobs.push(await scanDataset(datasetId)); } catch { /* semgrep absent */ }
       if (jobs.length > 0) setActiveJobs(jobs);
     } finally {
       setRunning(false);
     }
+  };
+
+  const runScan = async () => {
+    try {
+      const job = await scanDataset(datasetId);
+      setActiveJobs((prev) => [...prev.filter((j) => j.annotator_id !== "semgrep"), job]);
+    } catch { /* semgrep not installed */ }
   };
 
   const runOne = async (a: AnnotatorInfo) => {
@@ -258,6 +278,10 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
         <button className="btn btn-sm btn-ghost" onClick={runMetrics}
           title="Fill missing & refresh stale metrics (e.g. success_score) without re-running annotators">
           Compute Metrics
+        </button>
+        <button className="btn btn-sm btn-ghost" onClick={runScan}
+          title="Semgrep-scan every trajectory's code changes (cached; skips unchanged)">
+          Scan Security
         </button>
         {annotators.map((a) => (
           <button

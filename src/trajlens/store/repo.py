@@ -260,12 +260,25 @@ def get_dataset_stats(conn, dataset_id: str) -> dict:
         JOIN batches b ON i.batch_id = b.id AND b.dataset_id = ?
     """, (dataset_id,)).fetchone()[0]
 
+    # security: scan coverage + agent-introduced findings across the dataset
+    sec_row = conn.execute("""
+        SELECT COUNT(*) AS scanned,
+               COALESCE(SUM(introduced_count), 0) AS introduced,
+               SUM(CASE WHEN introduced_count > 0 THEN 1 ELSE 0 END) AS affected
+        FROM security_scans
+        WHERE content_hash IN (""" + ds_hashes_sql + ")", (dataset_id,)).fetchone()
+
     return {
         "total": total,
         "metrics": metrics_summary,
         "resolution": dict(res_dist),
         "top_tags": [{"tag": t, "count": c} for t, c in tag_counter.most_common(20)],
         "batches": [dict(r) for r in batches],
+        "security": {
+            "scanned": sec_row["scanned"] or 0,
+            "introduced": sec_row["introduced"] or 0,
+            "affected": sec_row["affected"] or 0,
+        },
     }
 
 
