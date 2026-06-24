@@ -77,10 +77,18 @@ def _slug(name: str) -> str:
     return s or "ds"
 
 
+def _id_taken(conn, did: str) -> bool:
+    """True if a dataset id is live or retired (a deleted id is never recycled)."""
+    return conn.execute(
+        "SELECT 1 FROM datasets WHERE id=? "
+        "UNION ALL SELECT 1 FROM retired_dataset_ids WHERE id=?",
+        (did, did)).fetchone() is not None
+
+
 def create_dataset(conn, *, name: str, description: str = "") -> dict:
     did = _slug(name) if name != "_default" else "_default"
-    # avoid slug collision: append short suffix
-    if conn.execute("SELECT 1 FROM datasets WHERE id=?", (did,)).fetchone():
+    # avoid slug collision (live OR previously-deleted): append short suffix
+    if name != "_default" and _id_taken(conn, did):
         did = f"{did}-{uuid.uuid4().hex[:6]}"
     conn.execute(
         "INSERT INTO datasets(id, name, description, created_at) VALUES(?,?,?,?)",
@@ -123,7 +131,12 @@ def delete_dataset(conn, dataset_id: str) -> bool:
     for bid in batch_ids:
         conn.execute("UPDATE ingestions SET batch_id=NULL WHERE batch_id=?", (bid,))
     conn.execute("DELETE FROM batches WHERE dataset_id=?", (dataset_id,))
+    # export_artifacts are dataset-scoped; the id is name-derived (_slug) and
+    # gets reused on recreate, so leaving these behind leaks old exports into a
+    # new same-name dataset.
+    conn.execute("DELETE FROM export_artifacts WHERE dataset_id=?", (dataset_id,))
     conn.execute("DELETE FROM datasets WHERE id=?", (dataset_id,))
+    conn.execute("INSERT OR IGNORE INTO retired_dataset_ids(id) VALUES(?)", (dataset_id,))
     conn.commit()
     return True
 

@@ -26,7 +26,13 @@ export function DatasetWall({ onOpen }: { onOpen: (id: string, name: string) => 
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteDataset(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["datasets"] }),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ["datasets"] });
+      // ponytail: dataset id is name-derived (_slug), so a recreated same-name
+      // dataset reuses this id — drop its cached trajectory pages so they don't
+      // bleed into the new dataset. Remove, not invalidate: the id may be gone.
+      qc.removeQueries({ queryKey: ["trajectories", id] });
+    },
   });
 
   return (
@@ -50,7 +56,7 @@ export function DatasetWall({ onOpen }: { onOpen: (id: string, name: string) => 
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="e.g. CodeGen SFT v3"
                 autoFocus
-                onKeyDown={(e) => e.key === "Enter" && newName.trim() && createMut.mutate()}
+                onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && newName.trim() && createMut.mutate()}
               />
             </div>
             <div style={{ flex: 2 }}>

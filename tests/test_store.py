@@ -9,7 +9,7 @@ from trajlens.adapters import detect_and_parse
 def test_migrate_creates_tables_and_sets_version(tmp_path):
     conn = dbmod.connect(str(tmp_path / "t.db"))
     v = dbmod.migrate(conn)
-    assert v == 5
+    assert v == 7
     names = {r["name"] for r in conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"trajectories", "ingestions", "raw_blobs", "items",
@@ -19,8 +19,8 @@ def test_migrate_creates_tables_and_sets_version(tmp_path):
 
 def test_migrate_is_idempotent(tmp_path):
     conn = dbmod.connect(str(tmp_path / "t.db"))
-    assert dbmod.migrate(conn) == 5
-    assert dbmod.migrate(conn) == 5  # second run is a no-op
+    assert dbmod.migrate(conn) == 7
+    assert dbmod.migrate(conn) == 7  # second run is a no-op
 
 
 def test_wal_enabled(tmp_path):
@@ -93,6 +93,16 @@ def test_get_or_create_dataset_idempotent(tmp_path):
 def test_delete_dataset_refuses_default(tmp_path):
     conn = dbmod.connect(str(tmp_path / "t.db")); dbmod.migrate(conn)
     assert repo.delete_dataset(conn, "_default") is False
+
+
+def test_recreated_dataset_does_not_recycle_id(tmp_path):
+    conn = dbmod.connect(str(tmp_path / "t.db")); dbmod.migrate(conn)
+    d1 = repo.create_dataset(conn, name="test")
+    assert d1["id"] == "test"
+    repo.delete_dataset(conn, d1["id"])
+    d2 = repo.create_dataset(conn, name="test")
+    assert d2["id"] != d1["id"]        # no aliasing of the deleted dataset
+    assert d2["id"].startswith("test-")
 
 
 def test_put_trajectory_with_batch(tmp_path):
