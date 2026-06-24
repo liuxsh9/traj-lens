@@ -1,7 +1,27 @@
 import json
+import os
 import pathlib
 
 import typer
+
+
+def _load_dotenv():
+    """Read .env from CWD if present — stdlib only, no dependency."""
+    env_file = pathlib.Path(".env")
+    if not env_file.is_file():
+        return
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        os.environ.setdefault(key.strip(), val.strip())
+
+
+_load_dotenv()
+
+_DB = os.environ.get("TRAJLENS_DB", "trajlens.db")
+_BLOBS = os.environ.get("TRAJLENS_BLOBS", "blobs")
 
 app = typer.Typer(help="traj-lens CLI")
 
@@ -10,8 +30,8 @@ app = typer.Typer(help="traj-lens CLI")
 def ingest(
     path: str,
     dataset: str = "_default",
-    db: str = "trajlens.db",
-    blob_dir: str = "blobs",
+    db: str = _DB,
+    blob_dir: str = _BLOBS,
 ):
     """Ingest trajectories from JSON or JSONL files.
 
@@ -101,7 +121,7 @@ def ingest(
 @app.command()
 def annotate(
     config_path: str = typer.Argument(..., help="Annotator YAML config path"),
-    db: str = "trajlens.db",
+    db: str = _DB,
 ):
     """Run an annotator on all stored trajectories."""
     import asyncio
@@ -125,7 +145,7 @@ def annotate(
 
 
 @app.command()
-def metrics(db: str = "trajlens.db"):
+def metrics(db: str = _DB):
     """Compute all built-in metrics for stored trajectories."""
     from trajlens.store import db as dbmod
     import trajlens.metrics.builtins  # noqa: F401 — registers metrics
@@ -142,8 +162,8 @@ def export(
     dataset: str = typer.Argument(..., help="Dataset name or id"),
     format: str = typer.Option("panguml2", help="Export format"),
     output: str = typer.Option("export.jsonl", help="Output file path"),
-    db: str = "trajlens.db",
-    blob_dir: str = "blobs",
+    db: str = _DB,
+    blob_dir: str = _BLOBS,
 ):
     """Export trajectories from a dataset to training format."""
     from trajlens.store import db as dbmod, repo
@@ -186,9 +206,11 @@ def export(
 
 
 @app.command()
-def serve(host: str = "127.0.0.1", port: int = 8000):
-    """Run the API + (later) hosted web."""
+def serve(host: str = "127.0.0.1", port: int = 8000, db: str = _DB, blob_dir: str = _BLOBS):
+    """Run the API + web viewer."""
     import uvicorn
+    os.environ["TRAJLENS_DB"] = db
+    os.environ["TRAJLENS_BLOBS"] = blob_dir
     uvicorn.run("trajlens.api.app:app", host=host, port=port)
 
 

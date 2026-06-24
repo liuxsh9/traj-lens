@@ -1,3 +1,4 @@
+import os
 import pathlib
 
 from fastapi import FastAPI
@@ -11,7 +12,9 @@ from trajlens.api.routes import router
 WEB_DIST = pathlib.Path(__file__).resolve().parent.parent.parent.parent / "web" / "dist"
 
 
-def create_app(db_path: str = "trajlens.db", blob_dir: str = "blobs") -> FastAPI:
+def create_app(db_path: str | None = None, blob_dir: str | None = None) -> FastAPI:
+    db_path = db_path or os.environ.get("TRAJLENS_DB", "trajlens.db")
+    blob_dir = blob_dir or os.environ.get("TRAJLENS_BLOBS", "blobs")
     app = FastAPI(title="traj-lens", version="0.0.1")
     # Migrate once at startup
     conn = dbmod.connect(db_path)
