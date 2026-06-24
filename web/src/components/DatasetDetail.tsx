@@ -173,6 +173,12 @@ function jobLabel(j: JobInfo): { text: string; color: string } {
   return { text: `✓ ${parts.join(" · ")}`, color: errs > 0 ? "var(--warn)" : "var(--good)" };
 }
 
+function metricsLabel(m: { status: string; computed?: number }): { text: string; color: string } {
+  if (m.status === "pending") return { text: "running…", color: "var(--warn)" };
+  if (m.status === "error") return { text: "failed", color: "var(--bad)" };
+  return { text: `✓ ${m.computed ?? 0} computed`, color: "var(--good)" };
+}
+
 function AnnotatePanel({ datasetId }: { datasetId: string }) {
   const qc = useQueryClient();
   const { data: annotators = [] } = useQuery({
@@ -181,21 +187,23 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
   });
   const [activeJobs, setActiveJobs] = useState<JobInfo[]>([]);
   const [running, setRunning] = useState(false);
-  const [metricsMsg, setMetricsMsg] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<
+    { status: "pending" | "done" | "error"; computed?: number } | null
+  >(null);
 
   // Recompute metrics (annotation-independent ones aren't touched by the
   // annotator path; this fills/refreshes them) then refresh the views.
-  const runMetrics = async () => {
-    setMetricsMsg("Computing…");
+  const runMetrics = useCallback(async () => {
+    setMetrics({ status: "pending" });
     try {
       const { computed } = await computeMetrics(datasetId);
-      setMetricsMsg(`Metrics · ${computed} trajectories computed`);
-      qc.invalidateQueries({ queryKey: ["stats", datasetId] });
-      qc.invalidateQueries({ queryKey: ["trajectories"] });
+      setMetrics({ status: "done", computed });
     } catch {
-      setMetricsMsg("Metrics · failed");
+      setMetrics({ status: "error" });
     }
-  };
+    qc.invalidateQueries({ queryKey: ["stats", datasetId] });
+    qc.invalidateQueries({ queryKey: ["trajectories"] });
+  }, [datasetId, qc]);
 
   // Poll active jobs
   useEffect(() => {
@@ -212,14 +220,12 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
       setActiveJobs(updated);
       if (updated.every((j) => j.status !== "pending")) {
         // annotators recompute their own dependent metrics; this also fills
-        // annotation-independent ones (tool_count, etc.) before refreshing.
-        await computeMetrics(datasetId).catch(() => {});
-        qc.invalidateQueries({ queryKey: ["stats", datasetId] });
-        qc.invalidateQueries({ queryKey: ["trajectories"] });
+        // annotation-independent ones (tool_count, etc.) and shows the chip.
+        await runMetrics();
       }
     }, 2000);
     return () => clearInterval(timer);
-  }, [activeJobs, datasetId, qc]);
+  }, [activeJobs, runMetrics]);
 
   const runAll = async () => {
     setRunning(true);
@@ -267,12 +273,9 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
           </button>
         ))}
       </div>
-      {metricsMsg && (
-        <div className="dim" style={{ marginTop: 8, fontSize: 12 }}>{metricsMsg}</div>
-      )}
-      {activeJobs.length > 0 && (
+      {(activeJobs.length > 0 || metrics) && (
         <>
-          {activeJobs.every((j) => j.status !== "pending") && (
+          {activeJobs.length > 0 && activeJobs.every((j) => j.status !== "pending") && (
             <div className="dim" style={{ marginTop: 8, fontSize: 12 }}>
               {(() => {
                 const tot = (k: "done" | "skipped") =>
@@ -287,6 +290,14 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
             </div>
           )}
           <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap", fontSize: 12 }}>
+            {metrics && (() => {
+              const { text, color } = metricsLabel(metrics);
+              return (
+                <span className="chip chip-sm">
+                  metrics: <span style={{ color }}>{text}</span>
+                </span>
+              );
+            })()}
             {activeJobs.map((j) => {
               const { text, color } = jobLabel(j);
               return (
