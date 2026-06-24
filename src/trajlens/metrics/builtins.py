@@ -1,33 +1,36 @@
-"""Built-in session-level metrics."""
+"""Built-in session-level metrics.
+
+Each metric fn is `(traj, conn, anns)`: `anns` is this trajectory's full
+annotation list, fetched once by compute_metrics and shared across metrics —
+so the three annotation-reading metrics below don't each re-query the DB.
+"""
 import json
 
 from trajlens.core.model import Trajectory
 from trajlens.metrics import register
-from trajlens.store import repo
 
 _VERSION = "2"
 
 
 @register("turn_count", _VERSION)
-def turn_count(traj: Trajectory, conn) -> int:
+def turn_count(traj: Trajectory, conn, anns) -> int:
     return sum(1 for it in traj.items if it.type == "message" and it.role == "user")
 
 
 @register("step_count", _VERSION)
-def step_count(traj: Trajectory, conn) -> int:
+def step_count(traj: Trajectory, conn, anns) -> int:
     steps = {(it.run_id, it.step_id) for it in traj.items
              if it.step_id is not None}
     return len(steps)
 
 
 @register("tool_count", _VERSION)
-def tool_count(traj: Trajectory, conn) -> int:
+def tool_count(traj: Trajectory, conn, anns) -> int:
     return sum(1 for it in traj.items if it.type == "function_call")
 
 
 @register("pushback_count", _VERSION, depends_on=["pushback"])
-def pushback_count(traj: Trajectory, conn) -> int:
-    anns = repo.get_annotations_for_trajectory(conn, traj.content_hash)
+def pushback_count(traj: Trajectory, conn, anns) -> int:
     count = 0
     for a in anns:
         if a["annotator_id"] != "pushback":
@@ -42,7 +45,7 @@ def pushback_count(traj: Trajectory, conn) -> int:
 
 
 @register("tool_intensity", _VERSION, depends_on=["error_recovery"])
-def tool_intensity(traj: Trajectory, conn) -> dict:
+def tool_intensity(traj: Trajectory, conn, anns) -> dict:
     calls = 0
     unique_tools: set[str] = set()
     for it in traj.items:
@@ -50,7 +53,6 @@ def tool_intensity(traj: Trajectory, conn) -> dict:
             calls += 1
             unique_tools.add(it.name)
 
-    anns = repo.get_annotations_for_trajectory(conn, traj.content_hash)
     error_steps = 0
     recovered_steps = 0
     for a in anns:
@@ -71,14 +73,12 @@ def tool_intensity(traj: Trajectory, conn) -> dict:
 
 
 @register("success_score", _VERSION, depends_on=["resolution", "pushback"])
-def success_score(traj: Trajectory, conn) -> float | None:
+def success_score(traj: Trajectory, conn, anns) -> float | None:
     """Composite score: resolution baseline − pushback penalty.
 
     resolved=100, partially=50, unresolved=0, indeterminate→None.
     Each pushback costs 5 points, capped at half the baseline.
     """
-    # Find resolution annotation
-    anns = repo.get_annotations_for_trajectory(conn, traj.content_hash)
     resolution = None
     pb_count = 0
     for a in anns:

@@ -7,7 +7,7 @@ from trajlens.store import repo
 
 log = logging.getLogger("trajlens.metrics")
 
-MetricFn = Callable  # (traj: Trajectory, conn) -> int | float | dict | None
+MetricFn = Callable  # (traj: Trajectory, conn, anns: list[dict]) -> int | float | dict | None
 
 # name -> (fn, version, depends_on)
 REGISTRY: dict[str, tuple[MetricFn, str, list[str]]] = {}
@@ -45,14 +45,18 @@ def compute_metrics(conn, content_hash: str) -> dict[str, Any]:
         return {}
     stored = repo.get_metrics_for_trajectory_full(conn, content_hash)
     results: dict[str, Any] = {}
+    anns: list | None = None  # fetched once, lazily — only if a metric needs recompute
     for name, (fn, _ver, _deps) in REGISTRY.items():
         eff = _effective_version(name, conn)
         prev = stored.get(name)
         if prev is not None and prev["version"] == eff:
             results[name] = prev["value"]
             continue
-        # stale or missing → (re)compute
-        value = fn(traj, conn)
+        # stale or missing → (re)compute. Share one annotation fetch across all
+        # metrics (3 builtins read the same set) instead of querying per-metric.
+        if anns is None:
+            anns = repo.get_annotations_for_trajectory(conn, content_hash)
+        value = fn(traj, conn, anns)
         repo.put_metric(conn, content_hash=content_hash,
                         metric_id=name, value=value, version=eff)
         if prev is not None:
