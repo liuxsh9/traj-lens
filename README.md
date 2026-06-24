@@ -2,7 +2,24 @@
 
 > Coding Agent 轨迹分析的底座平台：ingest 多样脚手架轨迹 → 统一中间格式 → 规则/LLM 标注 → 指标 → 可视化 → 挖掘/裁剪训练数据。
 
-**状态**：设计阶段完成，骨架（slice 1）实现待启动。设计文档是当前唯一权威来源 → [docs/superpowers/specs/2026-06-21-traj-lens-design.md](docs/superpowers/specs/2026-06-21-traj-lens-design.md)。
+**状态**：slice ①–⑤ 已落地（ingest / 标注中间件 / 指标 + 浏览 / 挑数据导出 / semgrep 安全扫描），可端到端运行。设计权威来源 → [docs/superpowers/specs/2026-06-21-traj-lens-design.md](docs/superpowers/specs/2026-06-21-traj-lens-design.md)。
+
+## 快速开始（本地 / 私有环境）
+
+```bash
+# 1. 依赖（需要 uv + Python 3.12，前端需要 Node 18+）
+uv sync
+cd web && npm install && npm run build && cd ..   # 产出 web/dist，serve 自动托管
+
+# 2. 配置（LLM 标注 + 存储路径）
+cp .env.example .env && $EDITOR .env
+
+# 3. 跑起来：导入一条轨迹 → 起服务
+uv run trajlens ingest tests/samples/claude_code/<some>.jsonl
+uv run trajlens serve            # http://127.0.0.1:8000 （API + 前端同一可部署物）
+```
+
+> 私有环境完整部署（离线、systemd/Docker、反代、备份、可选 semgrep）→ **[docs/DEPLOY.md](docs/DEPLOY.md)**。
 
 ## 它做什么
 
