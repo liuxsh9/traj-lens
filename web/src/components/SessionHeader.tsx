@@ -75,7 +75,7 @@ export function SessionHeader({ items, annotations, score, onBack, onExpandAll, 
         <span className="kv"><b>{steps}</b> steps · <b>{tools}</b> tools</span>
         {pbCount > 0 && <span className="kv" style={{ color: "var(--warn)" }}>pushback <b>{pbCount}</b></span>}
         {resolution && (
-          <span className={`chip-sm ${resolution === "resolved" ? "res-ok" : resolution === "unresolved" ? "res-fail" : "res-part"}`}>
+          <span className={`chip-sm ${resolution === "resolved" ? "res-ok" : resolution === "unresolved" ? "res-fail" : resolution === "indeterminate" ? "res-ind" : "res-part"}`}>
             {resolution}
           </span>
         )}
