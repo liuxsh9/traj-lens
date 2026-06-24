@@ -44,11 +44,13 @@ def _summarize(it: Item, max_chars: int = 150) -> str:
 
 
 def build(unit: list, ctx: list) -> list[dict]:
-    user_text = next((it.content for it in unit if it.type == "message" and it.role == "user"), "")
+    raw = next((it.content for it in unit if it.type == "message" and it.role == "user"), "")
+    # ponytail: cap head-only; intent signal is in the first sentence
+    user_text = raw[:1000]
     unit_ids = {id(it) for it in unit}
     before = [it for it in ctx if id(it) not in unit_ids]
 
-    recent = [_summarize(it) for it in before[-3:]]
+    recent = [_summarize(it, max_chars=100) for it in before[-3:]]
     context_summary = "\n".join(recent) if recent else "(start of session)"
 
     prompt = f"Preceding context:\n{context_summary}\n\nUser prompt to classify:\n{user_text}"

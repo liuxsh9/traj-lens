@@ -82,6 +82,17 @@ def test_parse_unknown_label_falls_back_to_none():
     assert out["category"] == "none"
 
 
+# ── truncation ─────────────────────────────────────────────────────────
+
+def test_build_truncates_long_user_text():
+    long_msg = "x" * 5000
+    unit = [MessageItem(role="user", content=long_msg)]
+    msgs = pushback.build(unit, unit)
+    user_prompt = msgs[1]["content"]
+    assert len(user_prompt) < 3000  # well under 20KB payload limit
+    assert user_prompt.endswith("x")  # head-only, no tail
+
+
 # ── schema ─────────────────────────────────────────────────────────────
 
 def test_schema_is_valid_json_schema():

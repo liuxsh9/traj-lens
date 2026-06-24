@@ -86,12 +86,14 @@ def _detect_prior_similar(user_text: str, ctx: list) -> str | None:
 
 
 def build(unit: list, ctx: list) -> list[dict]:
-    user_text = next((it.content for it in unit if it.type == "message" and it.role == "user"), "")
+    raw = next((it.content for it in unit if it.type == "message" and it.role == "user"), "")
+    # ponytail: cap head-only; pushback signal is always upfront
+    user_text = raw[:1500]
     unit_ids = {id(it) for it in unit}
     before = [it for it in ctx if id(it) not in unit_ids]
 
     # recent window for detailed context (last 5 items), keeps prompt compact
-    recent = [_summarize(it) for it in before[-5:]]
+    recent = [_summarize(it, max_chars=150) for it in before[-5:]]
     context_summary = "\n".join(recent) if recent else "(no prior context)"
 
     # scan ALL preceding items for similar user messages (cheap string op, not sent to LLM)

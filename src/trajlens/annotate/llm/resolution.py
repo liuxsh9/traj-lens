@@ -37,29 +37,28 @@ Respond in valid JSON only:
 {"label": "<one of: resolved, partially_resolved, unresolved, indeterminate>", "reason": "<1-2 sentence explanation>"}"""
 
 
-def _summarize(it: Item, max_chars: int = 300) -> str:
+def _summarize(it: Item, max_chars: int = 150) -> str:
     if it.type == "message":
         c = it.content[:max_chars] + ("…" if len(it.content) > max_chars else "")
         return f"[{it.role}] {c}"
     if it.type == "reasoning":
-        return f"[reasoning] {it.content[:150]}…"
+        return f"[reasoning] {it.content[:80]}…"
     if it.type == "function_call":
-        return f"[call] {it.name}({it.arguments[:150]})"
+        return f"[call] {it.name}({it.arguments[:80]})"
     if it.type == "function_call_output":
-        return f"[output] {it.output[:200]}"
+        return f"[output] {it.output[:100]}"
     return ""
 
 
 def build(unit: list, ctx: list) -> list[dict]:
     # ponytail: session-level = unit is the whole trajectory
-    # Summarize with head + tail strategy to stay within token budget
+    # Head+tail strategy: beginning has the task, end has the outcome
     summaries = [_summarize(it) for it in unit if _summarize(it)]
 
-    if len(summaries) > 40:
-        # head 15 + ... + tail 20 — tail is more important for outcome
-        head = summaries[:15]
-        tail = summaries[-20:]
-        body = "\n".join(head) + f"\n\n[... {len(summaries) - 35} items omitted ...]\n\n" + "\n".join(tail)
+    if len(summaries) > 30:
+        head = summaries[:10]
+        tail = summaries[-15:]
+        body = "\n".join(head) + f"\n\n[... {len(summaries) - 25} items omitted ...]\n\n" + "\n".join(tail)
     else:
         body = "\n".join(summaries)
 

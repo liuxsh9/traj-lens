@@ -62,14 +62,14 @@ def build(unit: list, ctx: list) -> list[dict]:
     first_user = ""
     for it in items:
         if it.type == "message" and it.role == "user":
-            first_user = it.content[:2000]
+            first_user = it.content[:1500]
             break
 
     # Extract last assistant message (full)
     last_asst = ""
     for it in reversed(items):
         if it.type == "message" and it.role == "assistant":
-            last_asst = it.content[:2000]
+            last_asst = it.content[:1500]
             break
 
     # Compute scaffold stats

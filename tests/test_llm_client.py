@@ -6,6 +6,8 @@ import pytest
 
 from trajlens.annotate.llm_client import (
     LLMProfile,
+    MAX_PAYLOAD_BYTES,
+    PayloadTooLargeError,
     _make_client_kwargs,
     _repair_json,
     chat_completion,
@@ -179,6 +181,12 @@ async def test_chat_completion_4xx_raises_without_retry(monkeypatch):
     assert calls["n"] == 1  # no retry on 4xx
 
 
+async def test_chat_completion_rejects_oversized_payload(monkeypatch):
+    huge = "x" * (MAX_PAYLOAD_BYTES + 1)
+    with pytest.raises(PayloadTooLargeError):
+        await chat_completion(_profile(), [{"role": "user", "content": huge}])
+
+
 async def test_chat_completion_rate_limiter(monkeypatch):
     """Verify internal rate limiter is used (env-configured, no external semaphore)."""
     import trajlens.annotate.llm_client as mod
@@ -197,3 +205,28 @@ async def test_chat_completion_rate_limiter(monkeypatch):
     assert content == "y"
     assert mod._limiter is not None
     assert mod._limiter._sem._value == 2  # released back to max
+
+
+def test_rate_limiter_reused_across_event_loops():
+    """Regression: the singleton limiter is reused across jobs, each run by a
+    separate asyncio.run() (fresh loop). asyncio primitives pin to their first
+    loop, so a limiter built in loop #1 must rebind in loop #2 instead of
+    raising 'bound to a different event loop'."""
+    from trajlens.annotate.llm_client import _RateLimiter
+
+    # max_concurrent=1 + several contending tasks forces the semaphore's
+    # blocking path, which is what pins it to a loop (the uncontended fast path
+    # doesn't, so it would hide the regression).
+    limiter = _RateLimiter(rps=1000, max_concurrent=1)
+
+    async def _one():
+        async with limiter:
+            await asyncio.sleep(0)
+            return True
+
+    async def _contend():
+        return await asyncio.gather(*[_one() for _ in range(3)])
+
+    # two independent loops, same limiter — mirrors two POST /jobs runs
+    assert asyncio.run(_contend()) == [True, True, True]
+    assert asyncio.run(_contend()) == [True, True, True]

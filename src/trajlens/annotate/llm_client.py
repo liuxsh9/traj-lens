@@ -28,18 +28,42 @@ def _load_dotenv(path: str = ".env") -> None:
 # Retry on rate limits, server errors, and timeouts. 4xx (except 429) is fatal.
 _BACKOFF = (0.5, 1.0, 2.0, 4.0)
 
+# ponytail: 24KB firewall limit; reserve 4KB for response_format/headers overhead
+MAX_PAYLOAD_BYTES = 20 * 1024
+
+
+class PayloadTooLargeError(ValueError):
+    """Raised when the serialized request body exceeds the firewall limit."""
+
 
 class _RateLimiter:
     """Token-bucket RPS + semaphore concurrency, configured from env."""
 
     def __init__(self, rps: float, max_concurrent: int):
-        self._sem = asyncio.Semaphore(max_concurrent)
+        self._max_concurrent = max_concurrent
         self._rps = rps
         self._tokens = float(rps)
         self._last_refill = time.monotonic()
-        self._lock = asyncio.Lock()
+        # asyncio primitives pin to the loop of first use; this singleton is
+        # reused across jobs, each run by asyncio.run() in a fresh loop/thread.
+        # Lazily (re)bind to the current loop so job #2 doesn't hit a Semaphore
+        # pinned to job #1's dead loop ("bound to a different event loop").
+        # ponytail: per-loop rebuild assumes one job-loop at a time; truly
+        # concurrent jobs each get their own loop, so cross-job throttling isn't
+        # shared. Move to a per-loop limiter dict if concurrent jobs need it.
+        self._sem: asyncio.Semaphore | None = None
+        self._lock: asyncio.Lock | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def _bind_loop(self) -> None:
+        loop = asyncio.get_running_loop()
+        if self._loop is not loop:
+            self._sem = asyncio.Semaphore(self._max_concurrent)
+            self._lock = asyncio.Lock()
+            self._loop = loop
 
     async def __aenter__(self):
+        self._bind_loop()
         await self._sem.acquire()
         async with self._lock:
             now = time.monotonic()
@@ -152,6 +176,12 @@ async def chat_completion(
             "type": "json_schema",
             "json_schema": {"name": "output", "strict": True, "schema": schema},
         }
+
+    payload_bytes = len(json.dumps(payload, ensure_ascii=False).encode())
+    if payload_bytes > MAX_PAYLOAD_BYTES:
+        raise PayloadTooLargeError(
+            f"payload {payload_bytes}B exceeds {MAX_PAYLOAD_BYTES}B limit "
+            f"(model={profile.model}, messages={len(messages)})")
 
     url = profile.base_url.rstrip("/") + "/chat/completions"
     headers = {"Authorization": f"Bearer {profile.api_key}"}
