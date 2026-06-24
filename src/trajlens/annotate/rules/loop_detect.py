@@ -1,8 +1,8 @@
 """loop_detect: flag steps where the same file is edited ≥3 times in preceding context."""
 import json
 
-EDIT_TOOLS = {"edit", "write", "Edit", "Write", "str_replace_editor",
-              "create_file", "write_to_file", "insert_content", "apply_diff"}
+from trajlens.core.tool_aliases import canonical, EDIT_TOOLS
+
 PATH_KEYS = {"file_path", "path", "file", "filename"}
 
 
@@ -12,7 +12,7 @@ def annotate(unit, ctx):
     for it in ctx:
         if it.type != "function_call":
             continue
-        if it.name not in EDIT_TOOLS:
+        if canonical(it.name) not in EDIT_TOOLS:
             continue
         try:
             args = json.loads(it.arguments)

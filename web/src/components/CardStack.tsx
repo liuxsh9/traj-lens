@@ -50,9 +50,20 @@ function buildPushbackMap(annotations: Annotation[]): Map<number, Annotation> {
   return map;
 }
 
+function buildIntentMap(annotations: Annotation[]): Map<number, string> {
+  const map = new Map<number, string>();
+  for (const a of annotations) {
+    if (a.annotator_id !== "intent" || a.target_type !== "user_turn") continue;
+    if (a.target_idx == null) continue;
+    const v = parseAnnotationValue(a);
+    if (v.intent && v.intent !== "other") map.set(a.target_idx, v.intent as string);
+  }
+  return map;
+}
+
 // ── UserCard (expandable: header preview + body) ──
-function UserCard({ items, id, pushback, isExpanded, onToggle }: {
-  items: Item[]; id: string; pushback: Annotation | null; isExpanded: boolean; onToggle: () => void;
+function UserCard({ items, id, pushback, intent, isExpanded, onToggle }: {
+  items: Item[]; id: string; pushback: Annotation | null; intent: string | null; isExpanded: boolean; onToggle: () => void;
 }) {
   const msg = items.find((it) => it.type === "message" && it.role === "user")
            ?? items.find((it) => it.type === "message");
@@ -73,6 +84,7 @@ function UserCard({ items, id, pushback, isExpanded, onToggle }: {
         <span className="actor">🧑</span>
         <span className="summ">{preview || "…"}</span>
         <span className="meta">
+          {intent && <span className="chip-sm" style={{ background: "var(--border-light)", fontSize: 10 }}>{intent}</span>}
           {isPush && <span className="chip-sm res-fail">{pbLabel}</span>}
           <span className="caret">{isExpanded ? "▾" : "▸"}</span>
         </span>
@@ -229,6 +241,7 @@ export function PinnedReply({ items, isExpanded, onToggle }: {
 export function CardStack({ items, annotations, expanded, onToggle }: Props) {
   const turns = groupByTurns(items);
   const pbMap = buildPushbackMap(annotations);
+  const intentMap = buildIntentMap(annotations);
 
   // Count user messages per turn group to map to backend target_idx
   // Backend target_idx counts individual user messages across the trajectory
@@ -241,10 +254,13 @@ export function CardStack({ items, annotations, expanded, onToggle }: Props) {
           // Find pushback for any user message in this turn group
           const userMsgs = t.items.filter((it) => it.type === "message" && it.role === "user");
           let turnPb: Annotation | null = null;
+          let turnIntent: string | null = null;
           const startIdx = userMsgCounter;
           for (let j = 0; j < userMsgs.length; j++) {
             const pb = pbMap.get(startIdx + j);
             if (pb) turnPb = pb;
+            const intent = intentMap.get(startIdx + j);
+            if (intent) turnIntent = intent;
           }
           userMsgCounter += userMsgs.length;
           return (
@@ -252,6 +268,7 @@ export function CardStack({ items, annotations, expanded, onToggle }: Props) {
               key={uk}
               id={uk}
               pushback={turnPb}
+              intent={turnIntent}
               items={t.items}
               isExpanded={expanded.has(uk)}
               onToggle={() => onToggle(uk)}

@@ -20,10 +20,12 @@ interface FieldDef {
 
 const FIELDS: FieldDef[] = [
   { key: "resolution", label: "resolution", type: "enum", ops: ["=", "≠"], options: [] },
+  { key: "interrupted", label: "interrupted", type: "enum", ops: ["="], options: ["true", "false"] },
   { key: "turns", label: "turns", type: "number", ops: ["≥", "≤", "="] },
   { key: "steps", label: "steps", type: "number", ops: ["≥", "≤", "="] },
   { key: "tools", label: "tools", type: "number", ops: ["≥", "≤", "="] },
   { key: "pushback_count", label: "pushback", type: "number", ops: ["≥", "≤", "="] },
+  { key: "error_steps", label: "error steps", type: "number", ops: ["≥", "≤", "="] },
   { key: "score", label: "score", type: "number", ops: ["≥", "≤", "="] },
   { key: "tags", label: "tags", type: "tags", ops: ["∋", "∌"] },
 ];
@@ -32,10 +34,11 @@ const FIELDS: FieldDef[] = [
 
 function getVal(row: TrajSummary, field: string): unknown {
   if (field === "resolution") return row.annotations?.resolution ?? "";
+  if (field === "interrupted") return row.annotations?.interrupted ? "true" : "false";
   if (field === "tags") return row.annotations?.tags ?? [];
   const metricMap: Record<string, string> = {
     turns: "turn_count", steps: "step_count", tools: "tool_count",
-    pushback_count: "pushback_count", score: "success_score",
+    pushback_count: "pushback_count", error_steps: "error_steps", score: "success_score",
   };
   return row.metrics?.[metricMap[field]] ?? 0;
 }
@@ -161,7 +164,9 @@ export function FilterBar({
       )}
 
       {adding && def && (
-        <AddRulePopover def={def} enumOptions={enumOptions} tagOptions={tagOptions}
+        <AddRulePopover def={def}
+          enumOptions={def.key === "interrupted" ? ["true", "false"] : enumOptions}
+          tagOptions={tagOptions}
           inputRef={inputRef} onCommit={commit} onCancel={() => setAdding(null)} />
       )}
     </div>

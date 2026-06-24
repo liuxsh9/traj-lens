@@ -71,6 +71,15 @@ const columns = [
       return v > 0 ? <span style={{ color: "var(--warn)" }}>{v}</span> : <span className="faint">0</span>;
     },
   }),
+  col.accessor((r) => r.metrics?.error_steps ?? 0, {
+    id: "errors",
+    header: "errs",
+    cell: (c) => {
+      const v = c.getValue();
+      return v > 0 ? <span style={{ color: "var(--warn)" }}>{v}</span> : <span className="faint">0</span>;
+    },
+    enableSorting: false,
+  }),
   col.accessor((r) => r.metrics?.success_score ?? -1, {
     id: "score",
     header: "score",

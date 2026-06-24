@@ -1,0 +1,6 @@
+id: intent
+type: llm
+target: user_turn
+context: "window:3"
+module: trajlens.annotate.llm.intent
+profile: default

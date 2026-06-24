@@ -45,6 +45,7 @@ export interface TrajSummary {
     title?: string;
     summary?: string;
     tags?: string[];
+    interrupted?: boolean;
   };
 }
 

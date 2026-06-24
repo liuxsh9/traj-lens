@@ -41,6 +41,35 @@ def pushback_count(traj: Trajectory, conn) -> int:
     return count
 
 
+@register("tool_intensity", _VERSION, depends_on=["error_recovery"])
+def tool_intensity(traj: Trajectory, conn) -> dict:
+    calls = 0
+    unique_tools: set[str] = set()
+    for it in traj.items:
+        if it.type == "function_call":
+            calls += 1
+            unique_tools.add(it.name)
+
+    anns = repo.get_annotations_for_trajectory(conn, traj.content_hash)
+    error_steps = 0
+    recovered_steps = 0
+    for a in anns:
+        if a["annotator_id"] != "error_recovery":
+            continue
+        v = json.loads(a["value"]) if isinstance(a["value"], str) else a["value"]
+        if v.get("has_error"):
+            error_steps += 1
+            if v.get("recovered") is True:
+                recovered_steps += 1
+
+    return {
+        "calls": calls,
+        "unique_tools": len(unique_tools),
+        "error_steps": error_steps,
+        "recovery_rate": round(recovered_steps / error_steps, 2) if error_steps > 0 else None,
+    }
+
+
 @register("success_score", _VERSION, depends_on=["resolution", "pushback"])
 def success_score(traj: Trajectory, conn) -> float | None:
     """Composite score: resolution baseline − pushback penalty.

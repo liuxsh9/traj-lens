@@ -16,11 +16,23 @@ export function SessionHeader({ items, annotations, onBack, onExpandAll, onColla
   let pbCount = 0;
   let score: number | null = null;
   let resolution = "";
+  let errorSteps = 0;
+  let recoveredSteps = 0;
+  let interrupted = false;
+  let interruptReason = "";
   for (const a of annotations) {
     let v: Record<string, unknown> = {};
     try { v = JSON.parse(a.value); } catch { /* skip */ }
     if (a.annotator_id === "pushback" && v.category && v.category !== "none") pbCount++;
     if (a.annotator_id === "resolution" && typeof v.resolution === "string") resolution = v.resolution;
+    if (a.annotator_id === "error_recovery" && v.has_error) {
+      errorSteps++;
+      if (v.recovered === true) recoveredSteps++;
+    }
+    if (a.annotator_id === "hard_interruption" && v.interrupted) {
+      interrupted = true;
+      interruptReason = (v.reason as string) ?? "";
+    }
   }
 
   // ponytail: compute score same way as backend — resolution baseline minus pushback penalty
@@ -59,6 +71,14 @@ export function SessionHeader({ items, annotations, onBack, onExpandAll, onColla
           <span className={`chip-sm ${resolution === "resolved" ? "res-ok" : resolution === "unresolved" ? "res-fail" : "res-part"}`}>
             {resolution}
           </span>
+        )}
+        {errorSteps > 0 && (
+          <span className="kv" title={`${recoveredSteps}/${errorSteps} errors recovered`}>
+            errors <b>{errorSteps}</b> · recovered <b>{recoveredSteps}</b>
+          </span>
+        )}
+        {interrupted && (
+          <span className="chip-sm res-fail" title={interruptReason}>interrupted</span>
         )}
         <div className="htools">
           <button className="btn" onClick={onExpandAll}>展开全部</button>

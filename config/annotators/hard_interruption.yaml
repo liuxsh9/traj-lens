@@ -1,0 +1,5 @@
+id: hard_interruption
+type: rule
+target: session
+context: whole
+module: trajlens.annotate.rules.hard_interruption

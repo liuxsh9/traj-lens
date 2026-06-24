@@ -2,7 +2,7 @@
 
 > 基于设计文档 `docs/superpowers/specs/2026-06-21-traj-lens-design.md` 各章节逐项展开。
 > 每条对应设计中一个可交付能力，不是文件粒度。
-> 更新日期：2026-06-23（slice-4 数据集管理+统计+导出 + slice-3 收尾 + 富 Viewer + runner 并发）
+> 更新日期：2026-06-23（slice-5 标注器+指标：error-recovery / intent / hard-interruption / tool_intensity）
 
 ---
 
@@ -255,10 +255,13 @@
 - [ ] 自研脚手架 adapter
 
 ### 更多标注器
-- [ ] intent（8 类，LLM，USER_TURN）
-- [ ] persona（4 类，LLM，USER_TURN）
-- [ ] hard-interruption 检测（rule）
-- [ ] error-recovery 检测（rule，STEP 级）
+- [x] intent（5 类，LLM，USER_TURN：implement/debug/refactor/explain/other）— `annotate/llm/intent.py`
+- [ ] persona（4 类，LLM，USER_TURN）— 暂缓，信号不可靠
+- [x] hard-interruption 检测（rule，SESSION 级）— `annotate/rules/hard_interruption.py`
+- [x] error-recovery 检测（rule，STEP 级）— `annotate/rules/error_recovery.py`
+
+### 新增指标
+- [x] tool_intensity metric（calls / unique_tools / error_steps / recovery_rate）— `metrics/builtins.py`
 
 ### 代码级信号（§1 可选 analyzer）
 - [ ] §10.B.4 artifacts 表实装
@@ -308,6 +311,6 @@
 | Slice 3 指标+浏览 | 12 | 10 | **83%** |
 | Slice 4 数据集+导出 | 22 | 16 | **73%** |
 | 富 Viewer | 17 | 13 | **76%** |
-| Slice 5 铺广度 | 16 | 3 | 19% |
+| Slice 5 铺广度 | 17 | 7 | 41% |
 | 基础设施 | 12 | 8 | 67% |
-| **合计** | **143** | **112** | **78%** |
+| **合计** | **144** | **116** | **81%** |

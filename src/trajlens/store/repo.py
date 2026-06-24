@@ -405,9 +405,11 @@ def query_trajectories(
         MAX(CASE WHEN m.metric_id='tool_count' THEN CAST(m.value AS INTEGER) END) AS tool_count,
         MAX(CASE WHEN m.metric_id='pushback_count' THEN CAST(m.value AS INTEGER) END) AS pushback_count,
         MAX(CASE WHEN m.metric_id='success_score' THEN CAST(m.value AS INTEGER) END) AS success_score,
-        -- annotations (resolution + topic)
+        MAX(CASE WHEN m.metric_id='tool_intensity' THEN m.value END) AS tool_intensity,
+        -- annotations (resolution + topic + hard_interruption)
         MAX(CASE WHEN a.annotator_id='resolution' THEN a.value END) AS ann_resolution,
-        MAX(CASE WHEN a.annotator_id='topic' THEN a.value END) AS ann_topic
+        MAX(CASE WHEN a.annotator_id='topic' THEN a.value END) AS ann_topic,
+        MAX(CASE WHEN a.annotator_id='hard_interruption' THEN a.value END) AS ann_interruption
       FROM trajectories t
       {ds_join}
       LEFT JOIN metrics m ON m.content_hash = t.content_hash
@@ -415,7 +417,7 @@ def query_trajectories(
         annotation_targets at2
         JOIN annotations a ON a.target_hash = at2.target_hash
         JOIN annotators n ON a.annotator_id = n.id AND a.annotator_version = n.version AND n.active = 1
-      ) ON at2.content_hash = t.content_hash AND a.annotator_id IN ('resolution','topic')
+      ) ON at2.content_hash = t.content_hash AND a.annotator_id IN ('resolution','topic','hard_interruption')
       GROUP BY t.content_hash
     )
     """
@@ -443,6 +445,11 @@ def query_trajectories(
             else:
                 where_parts.append("(ann_topic IS NULL OR ann_topic NOT LIKE ?)")
             params.append(f"%{val}%")
+        elif field == "interrupted":
+            if val.lower() in ("true", "1", "yes"):
+                where_parts.append("json_extract(ann_interruption, '$.interrupted') = 1")
+            else:
+                where_parts.append("(ann_interruption IS NULL OR json_extract(ann_interruption, '$.interrupted') = 0)")
         elif field in col_map and op in op_map:
             where_parts.append(f"COALESCE({col_map[field]}, 0) {op_map[op]} ?")
             params.append(int(val))
@@ -467,6 +474,8 @@ def query_trajectories(
     for r in rows:
         ann_res = json.loads(r["ann_resolution"]) if r["ann_resolution"] else None
         ann_topic = json.loads(r["ann_topic"]) if r["ann_topic"] else None
+        ann_int = json.loads(r["ann_interruption"]) if r["ann_interruption"] else None
+        ti = json.loads(r["tool_intensity"]) if r["tool_intensity"] else None
         summary: dict = {}
         if ann_res:
             summary["resolution"] = ann_res.get("resolution", "indeterminate")
@@ -474,6 +483,8 @@ def query_trajectories(
             summary["title"] = ann_topic.get("title", "")
             summary["summary"] = ann_topic.get("summary", "")
             summary["tags"] = ann_topic.get("tags", [])
+        if ann_int:
+            summary["interrupted"] = ann_int.get("interrupted", False)
         items.append({
             "content_hash": r["content_hash"],
             "items_count": r["items_count"],
@@ -484,6 +495,7 @@ def query_trajectories(
                 "tool_count": r["tool_count"] or 0,
                 "pushback_count": r["pushback_count"] or 0,
                 "success_score": r["success_score"] if r["success_score"] is not None else -1,
+                **({"error_steps": ti["error_steps"], "recovery_rate": ti["recovery_rate"]} if ti else {}),
             },
             "annotations": summary,
         })

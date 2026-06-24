@@ -1,0 +1,5 @@
+id: error_recovery
+type: rule
+target: step
+context: whole
+module: trajlens.annotate.rules.error_recovery
