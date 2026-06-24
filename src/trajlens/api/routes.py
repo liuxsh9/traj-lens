@@ -1,8 +1,10 @@
 import asyncio
 import json
+import os
 import sqlite3
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Generator
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile
@@ -125,27 +127,43 @@ def scan_dataset(dataset_id: str, request: Request,
     repo.update_job(conn, job_id, total=len(hashes))
     db_path = request.app.state.db_path
 
+    # semgrep shells out (subprocess releases the GIL), so a thread pool saturates
+    # cores. Parallelize read+scan; keep DB writes serial on `bg` — SQLite WAL is
+    # multi-reader / single-writer. ponytail: cpu_count, SEMGREP_CONCURRENCY overrides.
+    workers = int(os.environ.get("SEMGREP_CONCURRENCY") or (os.cpu_count() or 4))
+
+    def _scan_one(ch: str, cur: str):
+        """Worker: own connection (conn isn't thread-safe), read + scan, no writes.
+        Returns (ch, res); res is None when the cached scan is still fresh."""
+        w = dbmod.connect(db_path)
+        try:
+            prev = repo.get_security_scan(w, ch)
+            if prev and prev["ruleset_version"] == cur:
+                return ch, None
+            return ch, scan_changes(repo.get_trajectory(w, ch).items)
+        finally:
+            w.close()
+
     def _run():
         bg = dbmod.connect(db_path)
         cur = ruleset_version()
         done = skipped = 0
         errors: list[dict] = []
         try:
-            for ch in hashes:
-                prev = repo.get_security_scan(bg, ch)
-                if prev and prev["ruleset_version"] == cur:
-                    skipped += 1
-                else:
-                    traj = repo.get_trajectory(bg, ch)
-                    res = scan_changes(traj.items)
-                    if res.get("available") and "error" not in res:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = [pool.submit(_scan_one, ch, cur) for ch in hashes]
+                for fut in as_completed(futures):
+                    ch, res = fut.result()
+                    if res is None:
+                        skipped += 1
+                    elif res.get("available") and "error" not in res:
                         repo.put_security_scan(bg, content_hash=ch, findings=res["findings"],
                                                scanned=res["scanned"],
                                                ruleset_version=res.get("ruleset_version", cur))
                     else:
                         errors.append({"content_hash": ch, "error": res.get("error", "scan failed")})
-                done += 1
-                repo.update_job(bg, job_id, done=done, skipped=skipped)
+                    done += 1
+                    repo.update_job(bg, job_id, done=done, skipped=skipped)
             repo.update_job(bg, job_id, status="done", done=done, skipped=skipped,
                             errors=json.dumps(errors, ensure_ascii=False))
         except Exception as exc:  # noqa: BLE001
