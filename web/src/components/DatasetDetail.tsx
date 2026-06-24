@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   listBatches, getDatasetStats, listAnnotators, uploadToDataset,
-  createJob, getJob, computeMetrics, scanDataset,
+  createJob, getJob, listDatasetJobs, computeMetrics, scanDataset,
   type Batch, type DatasetStats, type AnnotatorInfo, type JobInfo,
 } from "../api";
 import { ListView } from "./ListView";
@@ -245,6 +245,26 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
     qc.invalidateQueries({ queryKey: ["stats", datasetId] });
     qc.invalidateQueries({ queryKey: ["trajectories"] });
   }, [datasetId, qc]);
+
+  // Hydrate from the server once on mount: jobs live in the DB (with dataset_id),
+  // so a fresh tab/browser — where sessionStorage is empty — can still recover a
+  // run that's in progress or just finished. Server is the source of truth; we
+  // keep pending jobs (any age) plus anything finished in the last 10 min.
+  useEffect(() => {
+    let cancelled = false;
+    listDatasetJobs(datasetId).then((jobs) => {
+      if (cancelled) return;
+      const RECENT_MS = 10 * 60 * 1000;
+      const now = Date.now();
+      const relevant = jobs.filter((j) =>
+        j.status === "pending" ||
+        (j.created_at && now - new Date(j.created_at).getTime() < RECENT_MS)
+      );
+      if (relevant.length > 0) setActiveJobs(relevant);
+    }).catch(() => { /* offline / not built — sticky state still paints */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetId]);
 
   // Poll active jobs
   useEffect(() => {

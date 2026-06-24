@@ -124,7 +124,7 @@ def scan_dataset(dataset_id: str, request: Request,
         raise HTTPException(status_code=400, detail="semgrep not installed")
 
     job_id = uuid.uuid4().hex[:12]
-    repo.create_job(conn, job_id=job_id, annotator_id="semgrep")
+    repo.create_job(conn, job_id=job_id, annotator_id="semgrep", dataset_id=dataset_id)
     hashes = [t["content_hash"] for t in repo.list_trajectories(conn, dataset_id=dataset_id)]
     repo.update_job(conn, job_id, total=len(hashes))
     db_path = request.app.state.db_path
@@ -204,7 +204,7 @@ def create_job(request: Request, body: dict = Body(...),
 
     # Pre-create the job row NOW (synchronously) so the row exists the moment we
     # return — the UI polls /jobs/{id} immediately and a 404 reads as an error.
-    repo.create_job(conn, job_id=job_id, annotator_id=spec.id)
+    repo.create_job(conn, job_id=job_id, annotator_id=spec.id, dataset_id=dataset_id)
 
     db_path = request.app.state.db_path
 
@@ -252,6 +252,13 @@ def get_job(job_id: str, conn: sqlite3.Connection = Depends(_conn)):
     d = dict(job)
     d["job_id"] = d.pop("id")  # align with POST /jobs response key
     return d
+
+
+@router.get("/api/v1/datasets/{dataset_id}/jobs")
+def list_dataset_jobs(dataset_id: str, conn: sqlite3.Connection = Depends(_conn)):
+    """Recent jobs for a dataset so the UI can recover run status on a fresh
+    tab/browser (DB is the source of truth, not per-tab sessionStorage)."""
+    return [{**dict(j), "job_id": j["id"]} for j in repo.list_jobs(conn, dataset_id=dataset_id)]
 
 
 # ── Annotator discovery ──────────────────────────────────────────────

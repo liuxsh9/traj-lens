@@ -9,7 +9,7 @@ from trajlens.adapters import detect_and_parse
 def test_migrate_creates_tables_and_sets_version(tmp_path):
     conn = dbmod.connect(str(tmp_path / "t.db"))
     v = dbmod.migrate(conn)
-    assert v == 10
+    assert v == 11
     names = {r["name"] for r in conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"trajectories", "ingestions", "raw_blobs", "items",
@@ -19,8 +19,23 @@ def test_migrate_creates_tables_and_sets_version(tmp_path):
 
 def test_migrate_is_idempotent(tmp_path):
     conn = dbmod.connect(str(tmp_path / "t.db"))
-    assert dbmod.migrate(conn) == 10
-    assert dbmod.migrate(conn) == 10  # second run is a no-op
+    assert dbmod.migrate(conn) == 11
+    assert dbmod.migrate(conn) == 11  # second run is a no-op
+
+
+def test_jobs_scoped_to_dataset(tmp_path):
+    conn = dbmod.connect(str(tmp_path / "t.db")); dbmod.migrate(conn)
+    repo.create_job(conn, job_id="j1", annotator_id="a", dataset_id="ds1")
+    repo.create_job(conn, job_id="j2", annotator_id="b", dataset_id="ds2")
+    # idempotent re-create (route pre-creates, runner re-calls) must not clobber
+    repo.update_job(conn, "j1", status="done", done=5)
+    repo.create_job(conn, job_id="j1", annotator_id="a", dataset_id="ds1")
+    assert repo.get_job(conn, "j1")["status"] == "done"
+
+    ds1 = repo.list_jobs(conn, dataset_id="ds1")
+    assert [j["id"] for j in ds1] == ["j1"]
+    assert repo.list_jobs(conn, dataset_id="ds2")[0]["id"] == "j2"
+    assert repo.list_jobs(conn, dataset_id="nope") == []
 
 
 def test_wal_enabled(tmp_path):

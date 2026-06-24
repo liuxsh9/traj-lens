@@ -355,16 +355,26 @@ def link_annotation_target(conn, *, target_hash: str, content_hash: str,
         " VALUES(?, ?, ?, ?)", (target_hash, content_hash, target_type, target_idx))
 
 
-def create_job(conn, *, job_id: str, annotator_id: str) -> dict:
+def create_job(conn, *, job_id: str, annotator_id: str, dataset_id: str | None = None) -> dict:
     now = _now()
     # INSERT OR IGNORE: the API route pre-creates the row at enqueue time, then
     # run_annotator calls this again when it actually starts. Second call is a
-    # no-op so we don't clobber the row (and reset status/progress).
+    # no-op so we don't clobber the row (and reset status/progress). The route
+    # supplies dataset_id; runner's later call passes None and is ignored anyway.
     conn.execute(
-        "INSERT OR IGNORE INTO jobs(id, annotator_id, status, total, done, errors, created_at, updated_at)"
-        " VALUES(?, ?, 'pending', 0, 0, '[]', ?, ?)", (job_id, annotator_id, now, now))
+        "INSERT OR IGNORE INTO jobs(id, annotator_id, dataset_id, status, total, done, errors, created_at, updated_at)"
+        " VALUES(?, ?, ?, 'pending', 0, 0, '[]', ?, ?)", (job_id, annotator_id, dataset_id, now, now))
     conn.commit()
     return {"id": job_id, "annotator_id": annotator_id, "status": "pending"}
+
+
+def list_jobs(conn, *, dataset_id: str, limit: int = 50) -> list[dict]:
+    """Recent jobs for a dataset, newest first. Lets the UI recover run status
+    after a tab/browser close (the job_ids no longer live only in sessionStorage)."""
+    rows = conn.execute(
+        "SELECT * FROM jobs WHERE dataset_id=? ORDER BY created_at DESC LIMIT ?",
+        (dataset_id, limit)).fetchall()
+    return [dict(r) for r in rows]
 
 
 def update_job(conn, job_id: str, **kwargs) -> None:

@@ -189,6 +189,8 @@ export interface JobInfo {
   done?: number;
   skipped?: number;
   errors?: string;
+  created_at?: string;
+  dataset_id?: string | null;
 }
 
 export async function computeMetrics(datasetId?: string): Promise<{ computed: number }> {
@@ -223,6 +225,14 @@ export async function createJob(annotatorPath: string, datasetId?: string): Prom
 export async function getJob(jobId: string): Promise<JobInfo> {
   const r = await fetch(`/api/v1/jobs/${jobId}`);
   if (!r.ok) throw new Error(`get job failed: ${r.status}`);
+  return r.json();
+}
+
+// Recent jobs for a dataset — lets the UI recover run status after a tab/browser
+// close, since sessionStorage (the old only home for job_ids) doesn't survive it.
+export async function listDatasetJobs(datasetId: string): Promise<JobInfo[]> {
+  const r = await fetch(`/api/v1/datasets/${datasetId}/jobs`);
+  if (!r.ok) throw new Error(`list dataset jobs failed: ${r.status}`);
   return r.json();
 }
 
