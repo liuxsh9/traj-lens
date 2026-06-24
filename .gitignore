@@ -34,3 +34,4 @@ web/dist/
 .DS_Store
 *.log
 e2e_blobs/
+.gstack/
