@@ -160,14 +160,7 @@ export async function getDatasetStats(datasetId: string): Promise<DatasetStats> 
 
 // ── Upload / Annotate API ───────────────────────────────────────────
 
-export interface UploadResult {
-  count: number;
-  errors_count: number;
-  errors: string[];
-  batch_id: string | null;
-}
-
-export async function uploadToDataset(datasetId: string, file: File): Promise<UploadResult> {
+export async function uploadToDataset(datasetId: string, file: File): Promise<JobInfo> {
   const form = new FormData();
   form.append("file", file);
   const r = await fetch(`/api/v1/datasets/${datasetId}/upload`, { method: "POST", body: form });

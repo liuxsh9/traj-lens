@@ -14,8 +14,12 @@ def _now() -> str:
 
 def put_trajectory(conn, traj: Trajectory, *, source_path=None,
                    raw_bytes: bytes | None = None, blob_dir: str | None = None,
-                   batch_id: str | None = None) -> str:
-    """Insert trajectory+items if new (dedup by content_hash); always record an ingestion."""
+                   batch_id: str | None = None, commit: bool = True) -> str:
+    """Insert trajectory+items if new (dedup by content_hash); always record an ingestion.
+
+    Pass commit=False to batch many trajectories in one transaction (bulk upload);
+    the caller is then responsible for conn.commit().
+    """
     ch = traj.content_hash
     exists = conn.execute(
         "SELECT 1 FROM trajectories WHERE content_hash=?", (ch,)).fetchone()
@@ -36,19 +40,21 @@ def put_trajectory(conn, traj: Trajectory, *, source_path=None,
             "INSERT INTO trajectories(content_hash, items_count, tools, meta, created_at)"
             " VALUES(?, ?, ?, ?, ?)",
             (ch, len(traj.items), json.dumps(traj.tools), json.dumps(traj.meta), _now()))
+        rows = []
         for i, it in enumerate(traj.items):
             payload = it.model_dump(exclude={"provenance", "step_id", "run_id"})
             prov = it.provenance.model_dump() if it.provenance else None
-            conn.execute(
-                "INSERT INTO items(content_hash, idx, type, payload, provenance)"
-                " VALUES(?, ?, ?, ?, ?)",
-                (ch, i, it.type, json.dumps(payload),
-                 json.dumps(prov) if prov else None))
+            rows.append((ch, i, it.type, json.dumps(payload),
+                         json.dumps(prov) if prov else None))
+        conn.executemany(
+            "INSERT INTO items(content_hash, idx, type, payload, provenance)"
+            " VALUES(?, ?, ?, ?, ?)", rows)
 
     conn.execute(
         "INSERT INTO ingestions(content_hash, source_path, raw_sha, ingested_at, batch_id)"
         " VALUES(?, ?, ?, ?, ?)", (ch, source_path, raw_sha, _now(), batch_id))
-    conn.commit()
+    if commit:
+        conn.commit()
     return ch
 
 

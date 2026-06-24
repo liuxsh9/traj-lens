@@ -6,6 +6,7 @@ import {
   type Batch, type DatasetStats, type AnnotatorInfo, type JobInfo,
 } from "../api";
 import { ListView } from "./ListView";
+import { useSticky } from "../useSticky";
 
 interface Props {
   datasetId: string;
@@ -104,20 +105,33 @@ function StatsPanel({ stats }: { stats: DatasetStats }) {
 function UploadZone({ datasetId, onDone }: { datasetId: string; onDone: () => void }) {
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<JobInfo | null>(null);
   const [result, setResult] = useState<{ count: number; errors_count: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const doUpload = useCallback(async (file: File) => {
     setUploading(true);
     setResult(null);
+    setProgress(null);
     try {
-      const r = await uploadToDataset(datasetId, file);
-      setResult({ count: r.count, errors_count: r.errors_count });
+      const job = await uploadToDataset(datasetId, file);
+      // Poll the background ingest job until it finishes (server streams the
+      // file to disk and parses in a worker thread — never blocks).
+      let j = job;
+      while (j.status === "pending" && j.job_id) {
+        await new Promise((r) => setTimeout(r, 1000));
+        try { j = await getJob(j.job_id); }
+        catch { j = { ...j, status: "error" }; }
+        setProgress(j);
+      }
+      const errs = j.errors ? (() => { try { return JSON.parse(j.errors!).length; } catch { return 0; } })() : 0;
+      setResult({ count: j.status === "error" ? 0 : (j.done ?? 0), errors_count: j.status === "error" ? -1 : errs });
       onDone();
-    } catch (e) {
+    } catch {
       setResult({ count: 0, errors_count: -1 });
     } finally {
       setUploading(false);
+      setProgress(null);
     }
   }, [datasetId, onDone]);
 
@@ -144,7 +158,10 @@ function UploadZone({ datasetId, onDone }: { datasetId: string; onDone: () => vo
         onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f); }}
       />
       {uploading ? (
-        <span>Uploading…</span>
+        <span>
+          Importing…
+          {progress && progress.total ? ` ${progress.done ?? 0}/${progress.total}` : ""}
+        </span>
       ) : result ? (
         <span>
           {result.errors_count === -1
@@ -196,7 +213,10 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
     queryKey: ["annotators"],
     queryFn: listAnnotators,
   });
-  const [activeJobs, setActiveJobs] = useState<JobInfo[]>([]);
+  // Persist active jobs per-dataset (sessionStorage): opening a sample unmounts
+  // this panel, but the backend jobs keep running. On remount the poll effect
+  // below resumes from these job_ids and catches up jobs that finished while away.
+  const [activeJobs, setActiveJobs] = useSticky<JobInfo[]>(`jobs:${datasetId}`, []);
   const [running, setRunning] = useState(false);
   const [metrics, setMetrics] = useState<
     { status: "pending" | "done" | "error"; computed?: number } | null

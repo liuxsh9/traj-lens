@@ -1,7 +1,9 @@
 import asyncio
 import json
 import os
+import shutil
 import sqlite3
+import tempfile
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -319,58 +321,97 @@ def dataset_stats(dataset_id: str, conn: sqlite3.Connection = Depends(_conn)):
 
 
 @router.post("/api/v1/datasets/{dataset_id}/upload")
-async def upload_to_dataset(
+def upload_to_dataset(
     dataset_id: str,
     request: Request,
     file: UploadFile = File(...),
     conn: sqlite3.Connection = Depends(_conn),
 ):
-    """Upload a JSONL file into a dataset. Each line = one trajectory."""
+    """Upload a JSONL file into a dataset (each line = one trajectory) as a
+    background job. The file is streamed to disk (never fully decoded in RAM),
+    then parsed+stored line-by-line in a worker thread with batched commits so a
+    500MB / thousands-of-line upload never blocks the server. Returns a job_id to
+    poll via GET /api/v1/jobs/{job_id} (total=lines, done=imported, skipped=blank,
+    errors=per-line parse failures)."""
     ds = repo.get_dataset(conn, dataset_id)
     if ds is None:
         raise HTTPException(status_code=404, detail="dataset not found")
 
     blob_dir = request.app.state.blob_dir
-    content = (await file.read()).decode("utf-8")
+    db_path = request.app.state.db_path
     fname = file.filename or "upload.jsonl"
 
-    batch = None
-    count = 0
-    errors: list[str] = []
-    hashes: list[str] = []
+    # Stream the upload to a temp file in chunks — bounded memory regardless of
+    # file size. We own the temp file and delete it when the job finishes.
+    tmp = tempfile.NamedTemporaryFile(prefix="trajlens-upload-", suffix=".jsonl", delete=False)
+    try:
+        shutil.copyfileobj(file.file, tmp, length=1 << 20)  # 1MB chunks
+    finally:
+        tmp.close()
+    tmp_path = tmp.name
 
-    for i, line in enumerate(content.splitlines()):
-        line = line.strip()
-        if not line:
-            continue
+    job_id = uuid.uuid4().hex[:12]
+    repo.create_job(conn, job_id=job_id, annotator_id="upload")
+
+    COMMIT_EVERY = 200  # ponytail: one transaction per 200 trajectories; tune if I/O-bound
+
+    def _run():
+        bg = dbmod.connect(db_path)
+        batch = None
+        done = skipped = 0
+        errors: list[str] = []
+        hashes: list[str] = []
         try:
-            obj = json.loads(line)
-            traj, fmt = detect_and_parse(obj)
-            if batch is None:
-                batch = repo.create_batch(conn, dataset_id=dataset_id, format=fmt,
-                                          name=fname, source_info={"filename": fname, "source": "upload"})
-            ch = repo.put_trajectory(conn, traj, source_path=fname,
-                                     raw_bytes=line.encode("utf-8"),
-                                     blob_dir=blob_dir, batch_id=batch["id"])
-            hashes.append(ch)
-            count += 1
-        except Exception as e:
-            errors.append(f"line {i+1}: {e}")
+            with open(tmp_path, encoding="utf-8") as f:
+                for i, line in enumerate(f):
+                    line = line.strip()
+                    if not line:
+                        skipped += 1
+                        continue
+                    try:
+                        obj = json.loads(line)
+                        traj, fmt = detect_and_parse(obj)
+                        if batch is None:
+                            batch = repo.create_batch(bg, dataset_id=dataset_id, format=fmt,
+                                                      name=fname,
+                                                      source_info={"filename": fname, "source": "upload"})
+                        ch = repo.put_trajectory(bg, traj, source_path=fname,
+                                                 raw_bytes=line.encode("utf-8"),
+                                                 blob_dir=blob_dir, batch_id=batch["id"],
+                                                 commit=False)
+                        hashes.append(ch)
+                        done += 1
+                    except Exception as e:  # noqa: BLE001 — one bad line shouldn't kill the batch
+                        errors.append(f"line {i+1}: {e}")
+                    if (done + skipped) % COMMIT_EVERY == 0:
+                        bg.commit()
+                        repo.update_job(bg, job_id, total=i + 1, done=done, skipped=skipped)
+            bg.commit()
+            if batch:
+                repo.update_batch_count(bg, batch["id"], done)
 
-    if batch:
-        repo.update_batch_count(conn, batch["id"], count)
+            # structural metrics (turns/steps/tools) so list columns aren't 0;
+            # annotation-dependent metrics stay None until annotators run.
+            if hashes:
+                from trajlens.metrics import compute_metrics
+                import trajlens.metrics.builtins  # noqa: F401 — ensure registered
+                for ch in hashes:
+                    compute_metrics(bg, ch)
 
-    # compute structural metrics (turns/steps/tools) now so list columns aren't
-    # 0; annotation-dependent metrics stay None until annotators run, then
-    # self-refresh via the effective-version staleness check.
-    if hashes:
-        from trajlens.metrics import compute_metrics
-        import trajlens.metrics.builtins  # noqa: F401 — ensure registered
-        for ch in hashes:
-            compute_metrics(conn, ch)
+            repo.update_job(bg, job_id, status="done", done=done, skipped=skipped,
+                            errors=json.dumps(errors[:50], ensure_ascii=False))
+        except Exception as exc:  # noqa: BLE001 — otherwise job stays 'pending' forever
+            repo.update_job(bg, job_id, status="error",
+                            errors=json.dumps([{"error": str(exc)}], ensure_ascii=False))
+        finally:
+            bg.close()
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
-    return {"count": count, "errors_count": len(errors),
-            "errors": errors[:20], "batch_id": batch["id"] if batch else None}
+    threading.Thread(target=_run, daemon=True).start()
+    return {"job_id": job_id, "annotator_id": "upload", "status": "pending"}
 
 
 @router.post("/api/v1/exports")
