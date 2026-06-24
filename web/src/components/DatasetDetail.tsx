@@ -329,6 +329,27 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
       </div>
       {(activeJobs.length > 0 || metrics) && (
         <>
+          {activeJobs.some((j) => j.status === "pending") && (() => {
+            // Aggregate progress across every annotator job in this "Run All".
+            // A job only publishes its real `total` after its Phase-1 enumeration
+            // finishes, so the denominator fills in over the first few polls.
+            const sum = (k: "done" | "skipped") =>
+              activeJobs.reduce((s, j) => s + (j[k] ?? 0), 0);
+            const total = activeJobs.reduce((s, j) => s + (j.total ?? 0), 0);
+            const finished = sum("done") + sum("skipped");
+            const pct = total ? Math.round((finished / total) * 100) : 0;
+            const pending = activeJobs.filter((j) => j.status === "pending").length;
+            return (
+              <div style={{ marginTop: 8 }}>
+                <div className="dim" style={{ fontSize: 11 }}>
+                  Annotating · {finished}/{total || "…"}{total ? ` (${pct}%)` : ""} · {pending} job{pending === 1 ? "" : "s"} left
+                </div>
+                <div className="res-bar" style={{ marginTop: 3 }}>
+                  <div style={{ width: `${pct}%`, background: "var(--warn)", minWidth: pct > 0 ? 4 : 0 }} />
+                </div>
+              </div>
+            );
+          })()}
           {activeJobs.length > 0 && activeJobs.every((j) => j.status !== "pending") && (
             <div className="dim" style={{ marginTop: 8, fontSize: 12 }}>
               {(() => {
