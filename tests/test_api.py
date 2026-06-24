@@ -43,6 +43,26 @@ def test_upload_done_survives_metric_failure(tmp_path, monkeypatch):
     assert c.get(f"/api/v1/datasets/{ds['id']}/trajectories").json()["total"] == 1
 
 
+def test_spa_cache_headers(tmp_path):
+    """index.html must revalidate (no-cache) so a rebuild never strands the
+    browser on a stale bundle; fingerprinted assets cache forever."""
+    import re
+    from trajlens.api.app import WEB_DIST
+
+    if not (WEB_DIST / "index.html").exists():
+        import pytest
+        pytest.skip("web/dist not built")
+
+    c = _client(tmp_path)
+    r = c.get("/")
+    assert r.headers["cache-control"] == "no-cache"
+
+    m = re.search(r'assets/[^"]+\.js', r.text)
+    assert m, "index.html should reference a hashed asset"
+    a = c.get(f"/{m.group(0)}")
+    assert "immutable" in a.headers["cache-control"]
+
+
 def test_health(tmp_path):
     c = _client(tmp_path)
     assert c.get("/api/health").json() == {"status": "ok"}

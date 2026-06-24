@@ -260,7 +260,16 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
         j.status === "pending" ||
         (j.created_at && now - new Date(j.created_at).getTime() < RECENT_MS)
       );
-      if (relevant.length > 0) setActiveJobs(relevant);
+      if (relevant.length === 0) return;
+      // Merge, don't replace: a Run All started between this fetch and its
+      // resolution put fresh jobs in state that the (older) server snapshot
+      // lacks. Keep locally-known jobs; only seed server-only ones. The poll
+      // effect refreshes pending jobs from the server anyway.
+      setActiveJobs((prev) => {
+        const known = new Set(prev.map((j) => j.job_id));
+        const extra = relevant.filter((j) => !known.has(j.job_id));
+        return extra.length > 0 ? [...prev, ...extra] : prev;
+      });
     }).catch(() => { /* offline / not built — sticky state still paints */ });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

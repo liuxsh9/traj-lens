@@ -35,13 +35,20 @@ def _mount_web(app: FastAPI) -> None:
     if not index.exists():
         return
 
+    # Vite fingerprints asset filenames (index-AbC123.js) so they're immutable
+    # and cache forever; index.html points at the current hash and MUST revalidate
+    # each load, or a rebuild strands users on a stale bundle ("undefined imported").
+    IMMUTABLE = {"Cache-Control": "public, max-age=31536000, immutable"}
+    NO_CACHE = {"Cache-Control": "no-cache"}
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def _spa_fallback(full_path: str):
         # serve static file if it exists, otherwise index.html (SPA)
         candidate = WEB_DIST / full_path
         if candidate.is_file():
-            return FileResponse(candidate)
-        return FileResponse(index)
+            headers = IMMUTABLE if full_path.startswith("assets/") else NO_CACHE
+            return FileResponse(candidate, headers=headers)
+        return FileResponse(index, headers=NO_CACHE)
 
 
 app = create_app()
