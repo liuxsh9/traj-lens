@@ -70,6 +70,7 @@ def get_one(content_hash: str, conn: sqlite3.Connection = Depends(_conn)):
         raise HTTPException(status_code=404, detail="not found")
     result = traj.model_dump()
     result["annotations"] = repo.get_annotations_for_trajectory(conn, content_hash)
+    result["metrics"] = repo.get_metrics_for_trajectory(conn, content_hash)
     # read-time projection of file edits/creates + shell runs (slice-5)
     from trajlens.core.code_changes import changes_as_dicts
     result["code_changes"] = changes_as_dicts(traj.items)

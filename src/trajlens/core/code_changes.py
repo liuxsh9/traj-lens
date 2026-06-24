@@ -9,9 +9,15 @@ field through a tolerant alias list.
 """
 
 import json
+import shlex
 from dataclasses import dataclass, asdict
 
 from trajlens.core.tool_aliases import canonical, BASH_TOOLS, EDIT_TOOLS
+
+# shell commands whose single-purpose form maps to a file op
+_DELETE_CMDS = {"rm", "rmdir", "unlink"}
+_CREATE_CMDS = {"touch"}
+_COMPOUND = ("&&", "||", ";", "|", "`", "$(", ">", "<", "\n")
 
 # arg-key aliases — same concept, different spelling across formats
 _PATH_KEYS = ("file_path", "filePath", "path", "file_name", "file_name1")
@@ -57,6 +63,28 @@ def _classify_edit(args: dict):
     return op, old, new
 
 
+def _bash_op(cmd: str):
+    """(op, path) for a shell command. Only reclassify unambiguous single-purpose
+    lines: `rm/rmdir/unlink <path>` -> delete, `touch <path>` -> create. Anything
+    compound (pipes, &&, redirects, subshells) stays op=run with no path —
+    parsing arbitrary shell for side effects is a rabbit hole.
+    """
+    if any(t in cmd for t in _COMPOUND):
+        return "run", None
+    try:
+        toks = shlex.split(cmd)
+    except ValueError:
+        return "run", None
+    if not toks:
+        return "run", None
+    head = toks[0]
+    if head in _DELETE_CMDS or head in _CREATE_CMDS:
+        targets = [t for t in toks[1:] if not t.startswith("-")]
+        op = "delete" if head in _DELETE_CMDS else "create"
+        return op, (targets[0] if targets else None)
+    return "run", None
+
+
 def extract_changes(items) -> list[CodeChange]:
     """Project the items into CodeChange events (file edits/creates + shell runs).
 
@@ -84,10 +112,9 @@ def extract_changes(items) -> list[CodeChange]:
         elif tool in BASH_TOOLS:
             cmd = _first(args, "command")
             if cmd:
-                # ponytail: bash stays op=run; sniffing rm/mv/touch for
-                # delete/create classification is the upgrade path if needed.
-                out.append(CodeChange(idx, it.step_id, it.run_id, tool, "run",
-                                      None, None, None, str(cmd)))
+                op, path = _bash_op(str(cmd))
+                out.append(CodeChange(idx, it.step_id, it.run_id, tool, op,
+                                      path, None, None, str(cmd)))
         # else: read/search/glob/todo/web — not a code change, skip
     return out
 

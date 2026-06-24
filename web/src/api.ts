@@ -46,6 +46,7 @@ export interface Trajectory {
   meta: Record<string, unknown>;
   annotations?: Annotation[];
   code_changes?: CodeChange[];
+  metrics?: Record<string, number | null>;
 }
 
 export interface TrajSummary {

@@ -3,18 +3,18 @@ import type { Item, Annotation } from "../api";
 interface Props {
   items: Item[];
   annotations: Annotation[];
+  score: number | null;  // backend-computed success_score — single source of truth
   onBack: () => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
 }
 
-export function SessionHeader({ items, annotations, onBack, onExpandAll, onCollapseAll }: Props) {
+export function SessionHeader({ items, annotations, score, onBack, onExpandAll, onCollapseAll }: Props) {
   const turns = items.filter((it) => it.type === "message" && it.role === "user").length;
   const steps = new Set(items.filter((it) => it.step_id != null).map((it) => `${it.run_id}-${it.step_id}`)).size;
   const tools = items.filter((it) => it.type === "function_call").length;
 
   let pbCount = 0;
-  let score: number | null = null;
   let resolution = "";
   let errorSteps = 0;
   let recoveredSteps = 0;
@@ -23,7 +23,8 @@ export function SessionHeader({ items, annotations, onBack, onExpandAll, onColla
   for (const a of annotations) {
     let v: Record<string, unknown> = {};
     try { v = JSON.parse(a.value); } catch { /* skip */ }
-    if (a.annotator_id === "pushback" && v.category && v.category !== "none") pbCount++;
+    // first user turn (idx 0) is the initial request, never pushback — match backend
+    if (a.annotator_id === "pushback" && a.target_idx !== 0 && v.category && v.category !== "none") pbCount++;
     if (a.annotator_id === "resolution" && typeof v.resolution === "string") resolution = v.resolution;
     if (a.annotator_id === "error_recovery" && v.has_error) {
       errorSteps++;
@@ -34,11 +35,6 @@ export function SessionHeader({ items, annotations, onBack, onExpandAll, onColla
       interruptReason = (v.reason as string) ?? "";
     }
   }
-
-  // ponytail: compute score same way as backend — resolution baseline minus pushback penalty
-  if (resolution === "resolved") score = Math.max(0, 100 - pbCount * 5);
-  else if (resolution === "partially_resolved") score = Math.max(0, 50 - pbCount * 5);
-  else if (resolution === "unresolved") score = 0;
 
   const scoreCls = score === null ? "score-na"
     : score >= 80 ? "score-good"
