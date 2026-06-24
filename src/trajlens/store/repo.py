@@ -313,16 +313,33 @@ def get_annotations(conn, target_hash: str) -> list[dict]:
 
 
 def get_annotations_for_trajectory(conn, content_hash: str) -> list[dict]:
-    # ponytail: annotation_targets maps target_hash→content_hash; query via that
+    # ponytail: annotation_targets maps target_hash→content_hash; query via that.
+    # Returns ALL stored annotations (not just active-version) so the viewer can
+    # flag stale ones: each row carries its own annotator_version plus the
+    # currently-active version (active_version) for the same annotator id. stale =
+    # active_version is set and differs from annotator_version.
     rows = conn.execute(
         "SELECT a.target_hash, a.annotator_id, a.annotator_version, a.value, a.produced_at,"
-        " at.target_type, at.target_idx"
+        " at.target_type, at.target_idx,"
+        " (SELECT version FROM annotators t WHERE t.id=a.annotator_id AND t.active=1) AS active_version"
         " FROM annotations a"
         " JOIN annotation_targets at ON a.target_hash=at.target_hash"
-        " JOIN annotators t ON a.annotator_id=t.id AND a.annotator_version=t.version"
-        " WHERE at.content_hash=? AND t.active=1"
+        " WHERE at.content_hash=?"
         " ORDER BY a.produced_at", (content_hash,)).fetchall()
-    return [dict(r) for r in rows]
+    # dedupe per (annotator, target): a trajectory may carry multiple versions of
+    # the same annotator (old + re-run). Keep the active-version row if present,
+    # else the latest — so the viewer shows one chip, stale only when the kept
+    # row's version lags the active one.
+    best: dict[tuple, dict] = {}
+    for r in rows:  # ascending produced_at
+        d = dict(r)
+        key = (d["annotator_id"], d["target_hash"], d["target_idx"])
+        cur = best.get(key)
+        # keep d unless the stored row is already the active version (sticky);
+        # rows arrive oldest-first, so otherwise latest wins.
+        if cur is None or cur["annotator_version"] != cur["active_version"]:
+            best[key] = d
+    return list(best.values())
 
 
 def link_annotation_target(conn, *, target_hash: str, content_hash: str,

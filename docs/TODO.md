@@ -89,7 +89,7 @@
 - [x] `annotator_version` 自动派生（sha256(type+config)[:12]）— `annotate/__init__.py`
 - [x] 缓存键 `(target_hash, annotator_id, version)` — `runner.py` + `002_annotations.sql`
 - [x] 多版本共存 + `active_version` 指针 — `annotators` 表 active 列
-- [ ] §10.B.6 版本覆盖率查询
+- [~] §10.B.6 版本覆盖率查询 — 不做：运维查询无 UI 消费方，陈旧检测已由 active_version 链覆盖（YAGNI）
 
 ### 标注存储
 - [x] `annotations` 表 migration — `002_annotations.sql`
@@ -126,7 +126,7 @@
 - [x] `POST /api/v1/jobs`（建标注任务，后台线程执行）— `routes.py`
 - [x] `GET /api/v1/jobs/{id}`（进度/错误）
 - [x] `GET /api/v1/trajectories/{hash}` 返回中叠加 annotations
-- [ ] `GET /api/v1/catalog/annotators`（id / target / schema / active_version）
+- [x] `GET /api/v1/annotators`（id / type / target / path / active_version）— `routes.py`（陈旧检测依赖 active_version）；schema 字段暂缓（标注器无声明式 schema）
 
 ### CLI 扩展
 - [x] `trajlens annotate <config.yaml>` — `cli.py`
@@ -135,7 +135,7 @@
 - [x] viewer 中展示标注 chip — `TrajectoryView.tsx`
 
 ### §10.B.5 依赖一等声明
-- [ ] spec 中 `depends_on` 字段 + 一趟拓扑排序
+- [~] spec 中 `depends_on` 字段 + 一趟拓扑排序 — 不做：当前标注器互无依赖，spec 预留无实例（YAGNI，有依赖时再上）
 
 ---
 
@@ -146,7 +146,7 @@
 - [x] 内置 metrics：pushback_count / turn_count / step_count / tool_count — `metrics/builtins.py`
 - [x] session-level success 评分（rule-based: resolution baseline − pushback penalty）— `metrics/builtins.py:success_score`
 - [ ] 效率指标（token/cost per 100 committed lines）— 需 artifacts
-- [ ] 安全指标（Semgrep diff）— 需 artifacts
+- [x] 安全指标（Semgrep diff）— `core/semgrep_scan.py` 差分基线：扫 old/new 片段，introduced = new 有 old 无（不依赖 artifacts，直接从轨迹工具调用提取）
 - [x] `metrics` 表 migration + CRUD — `003_metrics.sql` + `repo.py`
 - [x] §4.3 指标 provenance + 陈旧感知 — `_effective_version` compound key（metric version + dep annotator versions），自动检测依赖变更并 recompute
 - [x] 标注完成后自动失效依赖指标缓存 — `runner.py:_invalidate_dependent_metrics`
@@ -228,8 +228,8 @@
 - [x] pushback turn chip（category 标签）— `CardStack.tsx`
 - [x] session header 显示 topic 标题/摘要/tags + 分数/指标 — `SessionHeader.tsx`
 - [x] topic LLM 标注器（中文标题+摘要+类型标签）— `annotate/llm/topic.py`
-- [ ] turn/step chip 带 @version
-- [ ] 陈旧 badge（`v2 ready → 刷新？`）
+- [x] turn/step chip 带 @version — 由陈旧 badge 的 tooltip 覆盖（`id v_old→v_new`），每 chip 单独 @version 属重复信息，不单做
+- [x] 陈旧 badge（`v2 ready → 刷新？`）— `SessionHeader.tsx`「⟳ N 陈旧」会话级 badge + tooltip；后端 `get_annotations_for_trajectory` 返回所有版本标注 + active_version，去重保留 active
 
 ### 列表浏览增强
 - [x] 轨迹列显示 topic 标题 + hash + tags — `ListView.tsx`
@@ -267,7 +267,7 @@
 - [ ] §10.B.4 artifacts 表实装
 - [ ] code-survival metric（行级人/机归因，需 commit 输入）
 - [ ] committed lines 计数（效率分母）
-- [ ] Semgrep pre/post 安全扫描（agent 引入漏洞数 = post findings − pre baseline）
+- [x] Semgrep pre/post 安全扫描（agent 引入漏洞数 = post findings − pre baseline）— 差分基线 + 批量扫描 job（Run All 触发）+ 统计面板「引入漏洞」卡片 + 列表 sec 列/筛选
 
 ### 工具调用代码可观测（从轨迹中提取代码变更）
 - [x] 从 function_call（write/edit/bash）中提取代码 diff — `core/code_changes.py`（读时投影，复用 tool_aliases；str_replace_editor command 子类型分流；codex shell_command 别名补全）

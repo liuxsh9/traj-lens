@@ -21,6 +21,7 @@ export interface Annotation {
   target_hash: string;
   annotator_id: string;
   annotator_version: string;
+  active_version?: string | null;  // current active version; stale if differs
   value: string;
   produced_at: string;
   target_type?: string;

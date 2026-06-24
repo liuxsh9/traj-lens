@@ -54,6 +54,17 @@ export function SessionHeader({ items, annotations, score, onBack, onExpandAll, 
     if (Array.isArray(v.tags)) tags = v.tags as string[];
   }
 
+  // Stale: an annotation run by a version older than the annotator's active one.
+  // One session-level badge; tooltip lists which annotators lag (id v_old→v_new).
+  const staleIds = new Set<string>();
+  const staleDetail: string[] = [];
+  for (const a of annotations) {
+    if (a.active_version && a.annotator_version !== a.active_version && !staleIds.has(a.annotator_id)) {
+      staleIds.add(a.annotator_id);
+      staleDetail.push(`${a.annotator_id} ${a.annotator_version.slice(0, 8)}→${a.active_version.slice(0, 8)}`);
+    }
+  }
+
   return (
     <div className="shdr" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
@@ -75,6 +86,12 @@ export function SessionHeader({ items, annotations, score, onBack, onExpandAll, 
         )}
         {interrupted && (
           <span className="chip-sm res-fail" title={interruptReason}>interrupted</span>
+        )}
+        {staleIds.size > 0 && (
+          <span className="chip-sm" style={{ background: "var(--warn)", color: "#fff" }}
+            title={`有新版标注器可重跑：\n${staleDetail.join("\n")}`}>
+            ⟳ {staleIds.size} 陈旧
+          </span>
         )}
         <div className="htools">
           <button className="btn" onClick={onExpandAll}>展开全部</button>

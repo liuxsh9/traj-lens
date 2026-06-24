@@ -230,21 +230,27 @@ def get_job(job_id: str, conn: sqlite3.Connection = Depends(_conn)):
 # ── Annotator discovery ──────────────────────────────────────────────
 
 @router.get("/api/v1/annotators")
-def list_annotators():
-    """List available annotator configs from config/annotators/."""
+def list_annotators(conn: sqlite3.Connection = Depends(_conn)):
+    """List available annotator configs from config/annotators/, each annotated
+    with the currently-active registered version (if any) so the UI can flag
+    stale annotations (run by an older version)."""
     import pathlib, yaml  # noqa: E401
     configs_dir = pathlib.Path("config/annotators")
     if not configs_dir.is_dir():
         return []
+    active = {r["id"]: r["version"] for r in conn.execute(
+        "SELECT id, version FROM annotators WHERE active=1").fetchall()}
     result = []
     for p in sorted(configs_dir.glob("*.yaml")):
         with open(p) as f:
             cfg = yaml.safe_load(f)
+        aid = cfg.get("id", p.stem)
         result.append({
-            "id": cfg.get("id", p.stem),
+            "id": aid,
             "type": cfg.get("type", "unknown"),
             "target": cfg.get("target", "unknown"),
             "path": str(p),
+            "active_version": active.get(aid),
         })
     return result
 
