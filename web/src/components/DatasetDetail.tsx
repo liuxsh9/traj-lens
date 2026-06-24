@@ -189,11 +189,11 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
     setMetricsMsg("Computing…");
     try {
       const { computed } = await computeMetrics(datasetId);
-      setMetricsMsg(`Metrics computed · ${computed} trajectories`);
+      setMetricsMsg(`Metrics · ${computed} trajectories computed`);
       qc.invalidateQueries({ queryKey: ["stats", datasetId] });
       qc.invalidateQueries({ queryKey: ["trajectories"] });
     } catch {
-      setMetricsMsg("Metrics failed");
+      setMetricsMsg("Metrics · failed");
     }
   };
 
@@ -253,7 +253,6 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
           title="Fill missing & refresh stale metrics (e.g. success_score) without re-running annotators">
           Compute Metrics
         </button>
-        {metricsMsg && <span className="dim" style={{ fontSize: 12 }}>{metricsMsg}</span>}
         {annotators.map((a) => (
           <button
             key={a.id}
@@ -268,6 +267,9 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
           </button>
         ))}
       </div>
+      {metricsMsg && (
+        <div className="dim" style={{ marginTop: 8, fontSize: 12 }}>{metricsMsg}</div>
+      )}
       {activeJobs.length > 0 && (
         <>
           {activeJobs.every((j) => j.status !== "pending") && (
