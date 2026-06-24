@@ -183,8 +183,8 @@ async def test_chat_completion_rate_limiter(monkeypatch):
     """Verify internal rate limiter is used (env-configured, no external semaphore)."""
     import trajlens.annotate.llm_client as mod
     monkeypatch.setattr(mod, "_limiter", None)  # force re-init
-    monkeypatch.setenv("TRAJLENS_RPS", "20")
-    monkeypatch.setenv("TRAJLENS_MAX_CONCURRENCY", "2")
+    monkeypatch.setenv("LLM_RPS", "20")
+    monkeypatch.setenv("LLM_MAX_CONCURRENCY", "2")
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={
