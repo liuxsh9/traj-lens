@@ -140,9 +140,10 @@ export function ChangesPanel({ changes, hash, onJump }: {
     <div style={{ borderTop: "1px solid var(--border)", padding: "6px 12px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <button className="btn" onClick={() => setOpen((v) => !v)} style={{ fontSize: 12 }}>
-          {open ? "▾" : "▸"} 代码变更 ({changes.length}) <span className="dim">· {summary}</span>
+          {open ? "▾" : "▸"} 代码变更 ({changes.length})
         </button>
-        <button className="btn" onClick={runScan} disabled={scanning} style={{ fontSize: 12 }}>安全扫描</button>
+        <span className="dim" style={{ fontSize: 12 }}>{summary}</span>
+        <button className="btn" onClick={runScan} disabled={scanning} style={{ fontSize: 12, marginLeft: "auto" }}>安全扫描</button>
         {scanLabel() && <span className="dim" style={{ fontSize: 12 }}>{scanLabel()}</span>}
       </div>
       {open && (
