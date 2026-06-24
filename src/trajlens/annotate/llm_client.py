@@ -45,12 +45,11 @@ class _RateLimiter:
         self._tokens = float(rps)
         self._last_refill = time.monotonic()
         # asyncio primitives pin to the loop of first use; this singleton is
-        # reused across jobs, each run by asyncio.run() in a fresh loop/thread.
-        # Lazily (re)bind to the current loop so job #2 doesn't hit a Semaphore
-        # pinned to job #1's dead loop ("bound to a different event loop").
-        # ponytail: per-loop rebuild assumes one job-loop at a time; truly
-        # concurrent jobs each get their own loop, so cross-job throttling isn't
-        # shared. Move to a per-loop limiter dict if concurrent jobs need it.
+        # reused across jobs. Jobs run serially on the job-queue worker's single
+        # persistent loop (api/jobqueue.py), so _bind_loop runs once and the
+        # Semaphore/token-bucket are shared across every job — a true global
+        # ceiling. The per-loop rebind below is now just a safety net for tests
+        # or CLI paths that spin up their own asyncio.run loop.
         self._sem: asyncio.Semaphore | None = None
         self._lock: asyncio.Lock | None = None
         self._loop: asyncio.AbstractEventLoop | None = None

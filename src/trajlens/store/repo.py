@@ -357,8 +357,11 @@ def link_annotation_target(conn, *, target_hash: str, content_hash: str,
 
 def create_job(conn, *, job_id: str, annotator_id: str) -> dict:
     now = _now()
+    # INSERT OR IGNORE: the API route pre-creates the row at enqueue time, then
+    # run_annotator calls this again when it actually starts. Second call is a
+    # no-op so we don't clobber the row (and reset status/progress).
     conn.execute(
-        "INSERT INTO jobs(id, annotator_id, status, total, done, errors, created_at, updated_at)"
+        "INSERT OR IGNORE INTO jobs(id, annotator_id, status, total, done, errors, created_at, updated_at)"
         " VALUES(?, ?, 'pending', 0, 0, '[]', ?, ?)", (job_id, annotator_id, now, now))
     conn.commit()
     return {"id": job_id, "annotator_id": annotator_id, "status": "pending"}

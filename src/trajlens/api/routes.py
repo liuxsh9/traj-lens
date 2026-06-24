@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 import shutil
@@ -13,6 +12,7 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, Uplo
 
 from trajlens.adapters import detect_and_parse
 from trajlens.store import db as dbmod, repo
+from trajlens.api import jobqueue
 
 router = APIRouter()
 
@@ -146,7 +146,7 @@ def scan_dataset(dataset_id: str, request: Request,
         finally:
             w.close()
 
-    def _run():
+    def _run(loop):  # loop unused — semgrep is sync, but rides the serial queue
         bg = dbmod.connect(db_path)
         cur = ruleset_version()
         done = skipped = 0
@@ -173,8 +173,9 @@ def scan_dataset(dataset_id: str, request: Request,
         finally:
             bg.close()
 
-    threading.Thread(target=_run, daemon=True).start()
-    return {"job_id": job_id, "annotator_id": "semgrep", "status": "pending"}
+    queued_behind = jobqueue.submit(_run)
+    return {"job_id": job_id, "annotator_id": "semgrep", "status": "pending",
+            "queued_behind": queued_behind}
 
 
 @router.post("/api/v1/jobs")
@@ -201,13 +202,18 @@ def create_job(request: Request, body: dict = Body(...),
         content_hashes = [t["content_hash"] for t in
                           repo.list_trajectories(conn, dataset_id=dataset_id)]
 
+    # Pre-create the job row NOW (synchronously) so the row exists the moment we
+    # return — the UI polls /jobs/{id} immediately and a 404 reads as an error.
+    repo.create_job(conn, job_id=job_id, annotator_id=spec.id)
+
     db_path = request.app.state.db_path
 
-    def _run():
+    def _run(loop):
         bg_conn = dbmod.connect(db_path)
         try:
-            asyncio.run(run_annotator(bg_conn, spec, mod, llm_profiles=profiles,
-                                      content_hashes=content_hashes, job_id=job_id))
+            loop.run_until_complete(run_annotator(
+                bg_conn, spec, mod, llm_profiles=profiles,
+                content_hashes=content_hashes, job_id=job_id))
         except Exception as exc:  # noqa: BLE001
             # otherwise the job row stays 'pending' forever and the UI polls
             # it indefinitely (e.g. missing LLM profile raises mid-run).
@@ -216,8 +222,9 @@ def create_job(request: Request, body: dict = Body(...),
         finally:
             bg_conn.close()
 
-    threading.Thread(target=_run, daemon=True).start()
-    return {"job_id": job_id, "annotator_id": spec.id, "status": "pending"}
+    queued_behind = jobqueue.submit(_run)
+    return {"job_id": job_id, "annotator_id": spec.id, "status": "pending",
+            "queued_behind": queued_behind}
 
 
 @router.post("/api/v1/metrics/compute")
