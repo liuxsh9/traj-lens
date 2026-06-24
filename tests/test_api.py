@@ -42,3 +42,31 @@ def test_ingest_is_idempotent(tmp_path):
 def test_get_missing_404(tmp_path):
     c = _client(tmp_path)
     assert c.get("/api/v1/trajectories/nope").status_code == 404
+
+
+def test_job_lifecycle_uses_consistent_job_id_key(tmp_path):
+    """POST /jobs and GET /jobs/{id} must both expose 'job_id' — else frontend
+    polling reassigns from the GET 'id' field, loses job_id, and hits /jobs/undefined."""
+    import time
+
+    c = _client(tmp_path)
+    raw = json.loads((FIXTURES / "panguml2_weather.json").read_text())
+    c.post("/api/v1/trajectories", json=raw)
+
+    created = c.post("/api/v1/jobs",
+                     json={"annotator": "config/annotators/loop_detect.yaml"}).json()
+    assert "job_id" in created
+    jid = created["job_id"]
+
+    # Poll until done; each GET response must keep the same job_id key (no 'id' surprise)
+    for _ in range(40):
+        time.sleep(0.1)
+        got = c.get(f"/api/v1/jobs/{jid}")
+        assert got.status_code == 200
+        body = got.json()
+        assert body["job_id"] == jid
+        assert "id" not in body
+        if body["status"] != "pending":
+            break
+    else:
+        raise AssertionError("job never finished")

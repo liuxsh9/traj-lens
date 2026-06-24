@@ -162,11 +162,15 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
 
   // Poll active jobs
   useEffect(() => {
-    const pending = activeJobs.filter((j) => j.status === "pending");
+    const pending = activeJobs.filter((j) => j.status === "pending" && j.job_id);
     if (pending.length === 0) return;
     const timer = setInterval(async () => {
       const updated = await Promise.all(
-        activeJobs.map((j) => (j.status === "pending" ? getJob(j.job_id) : j))
+        activeJobs.map(async (j) => {
+          if (j.status !== "pending" || !j.job_id) return j;
+          try { return await getJob(j.job_id); }
+          catch { return { ...j, status: "error" }; }
+        })
       );
       setActiveJobs(updated);
       if (updated.every((j) => j.status !== "pending")) {
@@ -180,18 +184,23 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
   const runAll = async () => {
     setRunning(true);
     try {
-      const jobs = await Promise.all(
+      const results = await Promise.allSettled(
         annotators.map((a) => createJob(a.path, datasetId))
       );
-      setActiveJobs(jobs);
+      const jobs = results
+        .filter((r): r is PromiseFulfilledResult<JobInfo> => r.status === "fulfilled")
+        .map((r) => r.value);
+      if (jobs.length > 0) setActiveJobs(jobs);
     } finally {
       setRunning(false);
     }
   };
 
   const runOne = async (a: AnnotatorInfo) => {
-    const job = await createJob(a.path, datasetId);
-    setActiveJobs((prev) => [...prev, job]);
+    try {
+      const job = await createJob(a.path, datasetId);
+      setActiveJobs((prev) => [...prev, job]);
+    } catch { /* backend may reject if LLM profile missing */ }
   };
 
   return (

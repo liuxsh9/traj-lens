@@ -116,7 +116,9 @@ def get_job(job_id: str, conn: sqlite3.Connection = Depends(_conn)):
     job = repo.get_job(conn, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
-    return dict(job)
+    d = dict(job)
+    d["job_id"] = d.pop("id")  # align with POST /jobs response key
+    return d
 
 
 # ── Annotator discovery ──────────────────────────────────────────────
