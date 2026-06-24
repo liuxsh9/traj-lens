@@ -30,6 +30,7 @@ app = typer.Typer(help="traj-lens CLI")
 def ingest(
     path: str,
     dataset: str = "_default",
+    description: str = "",
     db: str = _DB,
     blob_dir: str = _BLOBS,
 ):
@@ -46,13 +47,13 @@ def ingest(
     conn = dbmod.connect(db)
     dbmod.migrate(conn)
 
-    ds = repo.get_or_create_dataset(conn, name=dataset)
-    text = pathlib.Path(path).read_text()
-    raw_bytes = text.encode("utf-8")
-    fname = pathlib.Path(path).name
+    ds = repo.get_or_create_dataset(conn, name=dataset, description=description)
+    fpath = pathlib.Path(path)
+    fname = fpath.name
     count = 0
-    fmt = None  # determined by first successful detect_and_parse
-    batch_id = None  # created lazily on first success
+    errors: list[str] = []
+    fmt = None
+    batch_id = None
 
     def _ensure_batch(format_name: str) -> str:
         nonlocal batch_id, fmt
@@ -64,58 +65,68 @@ def ingest(
         return batch_id
 
     # Try single JSON object first
+    text = fpath.read_text()
     try:
         obj = json.loads(text)
         if isinstance(obj, dict):
             traj, fmt_name = detect_and_parse(obj)
             bid = _ensure_batch(fmt_name)
             ch = repo.put_trajectory(conn, traj, source_path=path,
-                                     raw_bytes=raw_bytes, blob_dir=blob_dir,
-                                     batch_id=bid)
-            typer.echo(ch)
-            count = 1
-            repo.update_batch_count(conn, bid, count)
+                                     raw_bytes=text.encode("utf-8"),
+                                     blob_dir=blob_dir, batch_id=bid)
+            repo.update_batch_count(conn, bid, 1)
+            typer.echo(f"ingested 1 trajectory ({ch[:12]}…)")
             return
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, ValueError):
         pass
 
-    # JSONL: parse all lines
-    lines = [json.loads(ln) for ln in text.splitlines() if ln.strip()]
-    if not lines:
+    # ponytail: read lines from file (not splitlines — avoids breaking on \n inside JSON strings)
+    raw_lines: list[str] = []
+    with open(path) as f:
+        raw_lines = f.readlines()
+    raw_lines = [ln for ln in raw_lines if ln.strip()]
+    if not raw_lines:
         typer.echo("no data found", err=True)
         raise typer.Exit(1)
 
-    # ponytail: try the whole list as one session log (CC/Codex sniff checks list shape);
-    # if no adapter matches, fall back to per-line independent trajectories.
+    # Try the whole list as one session log (CC/Codex sniff checks list shape)
     try:
-        traj, fmt_name = detect_and_parse(lines)
+        parsed_all = [json.loads(ln) for ln in raw_lines]
+        traj, fmt_name = detect_and_parse(parsed_all)
         bid = _ensure_batch(fmt_name)
         ch = repo.put_trajectory(conn, traj, source_path=path,
-                                 raw_bytes=raw_bytes, blob_dir=blob_dir,
-                                 batch_id=bid)
-        typer.echo(ch)
-        count = 1
-        repo.update_batch_count(conn, bid, count)
+                                 raw_bytes=text.encode("utf-8"),
+                                 blob_dir=blob_dir, batch_id=bid)
+        repo.update_batch_count(conn, bid, 1)
+        typer.echo(f"ingested 1 session trajectory ({ch[:12]}…)")
         return
-    except ValueError:
+    except (ValueError, json.JSONDecodeError):
         pass
 
-    # Per-line: each line is an independent trajectory (openai_messages JSONL)
-    for ln in text.splitlines():
-        ln = ln.strip()
-        if not ln:
-            continue
-        obj = json.loads(ln)
-        traj, fmt_name = detect_and_parse(obj)
-        bid = _ensure_batch(fmt_name)
-        ch = repo.put_trajectory(conn, traj, source_path=path,
-                                 raw_bytes=ln.encode("utf-8"), blob_dir=blob_dir,
-                                 batch_id=bid)
-        typer.echo(ch)
-        count += 1
+    # Per-line: each line is an independent trajectory
+    total = len(raw_lines)
+    for i, ln in enumerate(raw_lines):
+        try:
+            obj = json.loads(ln)
+            traj, fmt_name = detect_and_parse(obj)
+            bid = _ensure_batch(fmt_name)
+            repo.put_trajectory(conn, traj, source_path=path,
+                                raw_bytes=ln.encode("utf-8"),
+                                blob_dir=blob_dir, batch_id=bid)
+            count += 1
+        except Exception as e:
+            errors.append(f"line {i+1}: {e}")
+        if (i + 1) % 500 == 0 or i + 1 == total:
+            typer.echo(f"\r  {i+1}/{total} processed, {count} ok, {len(errors)} errors", nl=(i+1 == total), err=True)
 
     if batch_id:
         repo.update_batch_count(conn, batch_id, count)
+    typer.echo(f"ingested {count} trajectories into \"{dataset}\"" +
+               (f" ({len(errors)} errors skipped)" if errors else ""))
+    for err in errors[:10]:
+        typer.echo(f"  {err}", err=True)
+    if len(errors) > 10:
+        typer.echo(f"  … and {len(errors)-10} more", err=True)
 
 
 @app.command()

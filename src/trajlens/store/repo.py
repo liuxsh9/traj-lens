@@ -89,11 +89,11 @@ def create_dataset(conn, *, name: str, description: str = "") -> dict:
     return {"id": did, "name": name, "description": description}
 
 
-def get_or_create_dataset(conn, *, name: str) -> dict:
+def get_or_create_dataset(conn, *, name: str, description: str = "") -> dict:
     row = conn.execute("SELECT * FROM datasets WHERE name=?", (name,)).fetchone()
     if row:
         return dict(row)
-    return create_dataset(conn, name=name)
+    return create_dataset(conn, name=name, description=description)
 
 
 def get_dataset(conn, dataset_id: str) -> dict | None:
