@@ -12,7 +12,6 @@ not on every detail fetch.
 
 import json
 import os
-import functools
 import shutil
 import subprocess
 import tempfile
@@ -28,10 +27,13 @@ def semgrep_available() -> bool:
     return shutil.which("semgrep") is not None
 
 
-@functools.lru_cache(maxsize=1)
 def ruleset_version() -> str:
     """Cache/staleness key. semgrep's own version is a good proxy — the bundled
-    `--config auto` rules move with releases, so a version bump invalidates caches."""
+    `--config auto` rules move with releases, so a version bump invalidates caches.
+
+    Not memoized on purpose: the server is long-lived, so caching the version in
+    process would make a mid-session `semgrep upgrade` invisible and freeze stored
+    scans as fresh forever. `--version` is ~tens of ms; a scan is seconds."""
     try:
         out = subprocess.run(["semgrep", "--version"], capture_output=True,
                              text=True, timeout=10)
