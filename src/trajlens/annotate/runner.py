@@ -103,6 +103,11 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
                 log.exception("annotator %s failed on target %s", spec.id, th)
                 errors.append({"content_hash": ch, "target_hash": th, "error": str(exc)})
 
+    # publish the real denominator now that enumeration is done, so the UI
+    # shows "running… 0/86" instead of "running…" with no total.
+    if job_id:
+        repo.update_job(conn, job_id, total=total, skipped=skipped)
+
     # Phase 2: fire LLM calls concurrently, write results back serial
     # ponytail: gather sends all at once; rate limiter in llm_client throttles to RPS/concurrency
     if pending:
@@ -133,15 +138,31 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
                 log.exception("annotator %s parse failed on %s", spec.id, th)
                 errors.append({"content_hash": ch, "target_hash": th, "error": str(exc)})
 
-    # ponytail: invalidate cached metrics that depend on this annotator
+    # ponytail: invalidate cached metrics that depend on this annotator, then
+    # recompute so the metrics table is repopulated (web read path has no lazy
+    # compute — empty table renders as 0). compute_metrics is cache-aware, so
+    # this only does work for the metrics we just invalidated.
     if done > 0:
         _invalidate_dependent_metrics(conn, spec.id)
+        _recompute_metrics(conn, content_hashes)
 
     result = {"total": total, "done": done, "skipped": skipped, "errors": errors}
     if job_id:
         repo.update_job(conn, job_id, status="done", total=total, done=done,
-                        errors=json.dumps(errors, ensure_ascii=False))
+                        skipped=skipped, errors=json.dumps(errors, ensure_ascii=False))
     return result
+
+
+def _recompute_metrics(conn, content_hashes):
+    """Recompute metrics for the given trajectories (cache-aware: only fills
+    missing/invalidated entries)."""
+    try:
+        from trajlens.metrics import compute_metrics
+        import trajlens.metrics.builtins  # noqa: F401 — ensure registered
+        for ch in content_hashes:
+            compute_metrics(conn, ch)
+    except Exception:
+        log.debug("metric recompute skipped (metrics module not available)")
 
 
 def _invalidate_dependent_metrics(conn, annotator_id: str):

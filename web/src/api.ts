@@ -176,6 +176,8 @@ export interface JobInfo {
   status: string;
   total?: number;
   done?: number;
+  skipped?: number;
+  errors?: string;
 }
 
 export async function createJob(annotatorPath: string, datasetId?: string): Promise<JobInfo> {

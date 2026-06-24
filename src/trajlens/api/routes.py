@@ -104,6 +104,11 @@ def create_job(request: Request, body: dict = Body(...),
         try:
             asyncio.run(run_annotator(bg_conn, spec, mod, llm_profiles=profiles,
                                       content_hashes=content_hashes, job_id=job_id))
+        except Exception as exc:  # noqa: BLE001
+            # otherwise the job row stays 'pending' forever and the UI polls
+            # it indefinitely (e.g. missing LLM profile raises mid-run).
+            repo.update_job(bg_conn, job_id, status="error",
+                            errors=json.dumps([{"error": str(exc)}]))
         finally:
             bg_conn.close()
 
@@ -207,6 +212,7 @@ async def upload_to_dataset(
     batch = None
     count = 0
     errors: list[str] = []
+    hashes: list[str] = []
 
     for i, line in enumerate(content.splitlines()):
         line = line.strip()
@@ -218,15 +224,25 @@ async def upload_to_dataset(
             if batch is None:
                 batch = repo.create_batch(conn, dataset_id=dataset_id, format=fmt,
                                           name=fname, source_info={"filename": fname, "source": "upload"})
-            repo.put_trajectory(conn, traj, source_path=fname,
-                                raw_bytes=line.encode("utf-8"),
-                                blob_dir=blob_dir, batch_id=batch["id"])
+            ch = repo.put_trajectory(conn, traj, source_path=fname,
+                                     raw_bytes=line.encode("utf-8"),
+                                     blob_dir=blob_dir, batch_id=batch["id"])
+            hashes.append(ch)
             count += 1
         except Exception as e:
             errors.append(f"line {i+1}: {e}")
 
     if batch:
         repo.update_batch_count(conn, batch["id"], count)
+
+    # compute structural metrics (turns/steps/tools) now so list columns aren't
+    # 0; annotation-dependent metrics stay None until annotators run, then
+    # self-refresh via the effective-version staleness check.
+    if hashes:
+        from trajlens.metrics import compute_metrics
+        import trajlens.metrics.builtins  # noqa: F401 — ensure registered
+        for ch in hashes:
+            compute_metrics(conn, ch)
 
     return {"count": count, "errors_count": len(errors),
             "errors": errors[:20], "batch_id": batch["id"] if batch else None}

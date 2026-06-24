@@ -151,6 +151,28 @@ function UploadZone({ datasetId, onDone }: { datasetId: string; onDone: () => vo
 
 /* ── Annotator runner ─────────────────────────────────────────────── */
 
+function jobErrCount(j: JobInfo): number {
+  if (!j.errors) return 0;
+  try { return JSON.parse(j.errors).length; } catch { return 0; }
+}
+
+// Human-readable status for one annotator job. "done 0/86" used to read as a
+// failure; it's actually "86 already annotated, 0 new".
+function jobLabel(j: JobInfo): { text: string; color: string } {
+  if (j.status === "error") return { text: "failed", color: "var(--bad)" };
+  if (j.status === "pending") {
+    const prog = j.total ? ` ${j.done ?? 0}/${j.total}` : "";
+    return { text: `running…${prog}`, color: "var(--warn)" };
+  }
+  const done = j.done ?? 0, skipped = j.skipped ?? 0, errs = jobErrCount(j);
+  const parts: string[] = [];
+  if (done > 0) parts.push(`${done} new`);
+  if (skipped > 0) parts.push(`${skipped} cached`);
+  if (errs > 0) parts.push(`${errs} errors`);
+  if (parts.length === 0) parts.push("nothing to do");
+  return { text: `✓ ${parts.join(" · ")}`, color: errs > 0 ? "var(--warn)" : "var(--good)" };
+}
+
 function AnnotatePanel({ datasetId }: { datasetId: string }) {
   const qc = useQueryClient();
   const { data: annotators = [] } = useQuery({
@@ -224,18 +246,32 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
         ))}
       </div>
       {activeJobs.length > 0 && (
-        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap", fontSize: 12 }}>
-          {activeJobs.map((j) => (
-            <span key={j.job_id} className="chip chip-sm">
-              {j.annotator_id}:{" "}
-              {j.status === "pending" ? (
-                <span style={{ color: "var(--warn)" }}>running…{j.done != null ? ` ${j.done}/${j.total}` : ""}</span>
-              ) : (
-                <span style={{ color: "var(--good)" }}>done {j.done}/{j.total}</span>
-              )}
-            </span>
-          ))}
-        </div>
+        <>
+          {activeJobs.every((j) => j.status !== "pending") && (
+            <div className="dim" style={{ marginTop: 8, fontSize: 12 }}>
+              {(() => {
+                const tot = (k: "done" | "skipped") =>
+                  activeJobs.reduce((s, j) => s + (j[k] ?? 0), 0);
+                const errs = activeJobs.reduce((s, j) => s + jobErrCount(j), 0);
+                const failed = activeJobs.filter((j) => j.status === "error").length;
+                const parts = [`${tot("done")} new`, `${tot("skipped")} cached`];
+                if (errs > 0) parts.push(`${errs} errors`);
+                if (failed > 0) parts.push(`${failed} jobs failed`);
+                return `Annotators · ${parts.join(" · ")}`;
+              })()}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap", fontSize: 12 }}>
+            {activeJobs.map((j) => {
+              const { text, color } = jobLabel(j);
+              return (
+                <span key={j.job_id} className="chip chip-sm">
+                  {j.annotator_id}: <span style={{ color }}>{text}</span>
+                </span>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
