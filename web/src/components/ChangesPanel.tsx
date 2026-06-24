@@ -98,8 +98,10 @@ function ChangeRow({ c, onJump, findings }: {
   );
 }
 
-export function ChangesPanel({ changes, hash, onJump }: {
+export function ChangesPanel({ changes, hash, onJump, persisted, scannedBefore }: {
   changes: CodeChange[]; hash: string; onJump?: (itemIdx: number) => void;
+  persisted?: SemgrepFinding[];          // findings from a prior scan, shown on load
+  scannedBefore?: boolean;               // was this trajectory scanned at all
 }) {
   const [open, setOpen] = useState(false);
   const [scan, setScan] = useState<SemgrepResult | null>(null);
@@ -113,27 +115,34 @@ export function ChangesPanel({ changes, hash, onJump }: {
     .map((o) => `${counts[o]} ${OP[o].label}`)
     .join(" · ");
 
-  // group findings by the item they belong to
+  // findings shown = this session's fresh scan, else the persisted ones from a
+  // prior scan (so they appear on load without re-running semgrep)
+  const shown = scan?.findings ?? persisted ?? [];
   const byItem = new Map<number, SemgrepFinding[]>();
-  for (const f of scan?.findings ?? []) {
+  for (const f of shown) {
     const list = byItem.get(f.item_idx) ?? [];
     list.push(f);
     byItem.set(f.item_idx, list);
   }
 
+  const hasResult = scan !== null || scannedBefore;
   const runScan = async () => {
     setScanning(true);
-    try { setScan(await scanSemgrep(hash)); }
+    try { setScan(await scanSemgrep(hash, scannedBefore)); }  // force re-scan if already scanned
     catch { setScan({ available: true, scanned: 0, findings: [], error: "请求失败" }); }
     finally { setScanning(false); }
   };
 
   const scanLabel = () => {
     if (scanning) return "扫描中…";
-    if (!scan) return null;
-    if (!scan.available) return "semgrep 未安装";
-    if (scan.error) return `扫描出错：${scan.error}`;
-    return `扫描了 ${scan.scanned} 个文件，发现 ${scan.findings.length} 处`;
+    if (scan) {
+      if (!scan.available) return "semgrep 未安装";
+      if (scan.error) return `扫描出错：${scan.error}`;
+      const tag = scan.cached ? "（缓存）" : "";
+      return `发现 ${scan.findings.length} 处${tag}`;
+    }
+    if (scannedBefore) return `已扫描 · ${shown.length} 处（缓存）`;
+    return null;
   };
 
   return (
@@ -143,7 +152,9 @@ export function ChangesPanel({ changes, hash, onJump }: {
           {open ? "▾" : "▸"} 代码变更 ({changes.length})
         </button>
         <span className="dim" style={{ fontSize: 12 }}>{summary}</span>
-        <button className="btn" onClick={runScan} disabled={scanning} style={{ fontSize: 12, marginLeft: "auto" }}>安全扫描</button>
+        <button className="btn" onClick={runScan} disabled={scanning} style={{ fontSize: 12, marginLeft: "auto" }}>
+          {hasResult ? "重新扫描" : "安全扫描"}
+        </button>
         {scanLabel() && <span className="dim" style={{ fontSize: 12 }}>{scanLabel()}</span>}
       </div>
       {open && (

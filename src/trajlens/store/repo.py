@@ -388,6 +388,51 @@ def list_trajectories_with_metrics(conn) -> list[dict]:
     return query_trajectories(conn)["items"]
 
 
+# ── Security findings (Semgrep) CRUD ──────────────────────────────────
+
+def put_security_scan(conn, *, content_hash: str, findings: list[dict],
+                      scanned: int, ruleset_version: str) -> None:
+    """Replace all findings for a trajectory + record scan state, and mirror the
+    count into metrics so list/filter/stats pick it up for free.
+
+    security_findings_count is written directly (not a registered builtin metric)
+    on purpose: semgrep is external/non-pure, so it must stay OUT of the
+    compute_metrics auto-recompute pipeline — an annotation change must never
+    trigger a re-scan. compute_metrics only iterates REGISTRY, so it leaves this
+    row alone.
+    """
+    conn.execute("DELETE FROM security_findings WHERE content_hash=?", (content_hash,))
+    for f in findings:
+        conn.execute(
+            "INSERT INTO security_findings"
+            "(content_hash, item_idx, check_id, severity, message, line)"
+            " VALUES(?,?,?,?,?,?)",
+            (content_hash, f["item_idx"], f["check_id"], f["severity"],
+             f["message"], f.get("line")))
+    conn.execute(
+        "INSERT OR REPLACE INTO security_scans"
+        "(content_hash, ruleset_version, scanned, finding_count, scanned_at)"
+        " VALUES(?,?,?,?,?)",
+        (content_hash, ruleset_version, scanned, len(findings), _now()))
+    put_metric(conn, content_hash=content_hash, metric_id="security_findings_count",
+               value=len(findings), version=ruleset_version)
+    conn.commit()
+
+
+def get_security_findings(conn, content_hash: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT item_idx, check_id, severity, message, line"
+        " FROM security_findings WHERE content_hash=? ORDER BY item_idx",
+        (content_hash,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_security_scan(conn, content_hash: str) -> dict | None:
+    r = conn.execute("SELECT * FROM security_scans WHERE content_hash=?",
+                     (content_hash,)).fetchone()
+    return dict(r) if r else None
+
+
 def query_trajectories(
     conn,
     *,
@@ -427,6 +472,7 @@ def query_trajectories(
         MAX(CASE WHEN m.metric_id='pushback_count' THEN CAST(m.value AS INTEGER) END) AS pushback_count,
         MAX(CASE WHEN m.metric_id='success_score' THEN CAST(m.value AS INTEGER) END) AS success_score,
         MAX(CASE WHEN m.metric_id='tool_intensity' THEN m.value END) AS tool_intensity,
+        MAX(CASE WHEN m.metric_id='security_findings_count' THEN CAST(m.value AS INTEGER) END) AS security_findings_count,
         -- annotations (resolution + topic + hard_interruption)
         MAX(CASE WHEN a.annotator_id='resolution' THEN a.value END) AS ann_resolution,
         MAX(CASE WHEN a.annotator_id='topic' THEN a.value END) AS ann_topic,
@@ -450,6 +496,7 @@ def query_trajectories(
     col_map = {
         "turns": "turn_count", "steps": "step_count", "tools": "tool_count",
         "pushback_count": "pushback_count", "score": "success_score",
+        "security_findings": "security_findings_count",
         "created_at": "created_at",
     }
     op_map = {"=": "=", "≥": ">=", "≤": "<=", "≠": "!="}
@@ -516,6 +563,7 @@ def query_trajectories(
                 "tool_count": r["tool_count"] or 0,
                 "pushback_count": r["pushback_count"] or 0,
                 "success_score": r["success_score"] if r["success_score"] is not None else -1,
+                "security_findings_count": r["security_findings_count"] if r["security_findings_count"] is not None else -1,
                 **({"error_steps": ti["error_steps"], "recovery_rate": ti["recovery_rate"]} if ti else {}),
             },
             "annotations": summary,

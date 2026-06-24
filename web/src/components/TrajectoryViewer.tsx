@@ -154,7 +154,8 @@ export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () =>
           onExpandAll={onExpandAll}
           onCollapseAll={onCollapseAll}
         />
-        <ChangesPanel changes={traj.code_changes ?? []} hash={hash} onJump={onClickTick} />
+        <ChangesPanel changes={traj.code_changes ?? []} hash={hash} onJump={onClickTick}
+          persisted={traj.security_findings} scannedBefore={!!traj.security_scan} />
         {firstUserTurn && (
           <PinnedUser
             items={firstUserTurn.items}

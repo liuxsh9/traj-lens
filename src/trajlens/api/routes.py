@@ -74,18 +74,38 @@ def get_one(content_hash: str, conn: sqlite3.Connection = Depends(_conn)):
     # read-time projection of file edits/creates + shell runs (slice-5)
     from trajlens.core.code_changes import changes_as_dicts
     result["code_changes"] = changes_as_dicts(traj.items)
+    # persisted semgrep findings (if scanned before) — shown without re-scanning
+    result["security_findings"] = repo.get_security_findings(conn, content_hash)
+    result["security_scan"] = repo.get_security_scan(conn, content_hash)
     return result
 
 
 @router.post("/api/v1/trajectories/{content_hash}/semgrep")
-def scan_semgrep(content_hash: str, conn: sqlite3.Connection = Depends(_conn)):
-    """On-demand Semgrep scan of code extracted from this trajectory's tool calls.
-    Returns {available, scanned, findings}; available=False if semgrep isn't installed."""
+def scan_semgrep(content_hash: str, force: bool = False,
+                 conn: sqlite3.Connection = Depends(_conn)):
+    """Semgrep scan of code extracted from this trajectory's tool calls.
+    Cache-aware: returns persisted findings when the stored scan's ruleset_version
+    matches the installed semgrep (pass force=true to re-scan). Persists results so
+    the count surfaces in the list/filter. available=False if semgrep isn't installed."""
     traj = repo.get_trajectory(conn, content_hash)
     if traj is None:
         raise HTTPException(status_code=404, detail="not found")
-    from trajlens.core.semgrep_scan import scan_changes
-    return scan_changes(traj.items)
+    from trajlens.core.semgrep_scan import scan_changes, semgrep_available, ruleset_version
+    if not semgrep_available():
+        return {"available": False, "scanned": 0, "findings": [], "cached": False}
+
+    cur = ruleset_version()
+    scan = repo.get_security_scan(conn, content_hash)
+    if scan and scan["ruleset_version"] == cur and not force:
+        return {"available": True, "scanned": scan["scanned"], "cached": True,
+                "findings": repo.get_security_findings(conn, content_hash)}
+
+    res = scan_changes(traj.items)
+    if res.get("available") and "error" not in res:
+        repo.put_security_scan(conn, content_hash=content_hash, findings=res["findings"],
+                               scanned=res["scanned"], ruleset_version=res.get("ruleset_version", cur))
+    res["cached"] = False
+    return res
 
 
 @router.post("/api/v1/jobs")

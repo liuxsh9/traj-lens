@@ -27,7 +27,7 @@ function ScorePill({ v }: { v: number }) {
 // ponytail: sort_by map — column id → backend field name
 const sortFieldMap: Record<string, string> = {
   turns: "turns", steps: "steps", tools: "tools",
-  pb: "pushback_count", score: "score", created_at: "created_at",
+  pb: "pushback_count", score: "score", sec: "security_findings", created_at: "created_at",
 };
 
 const columns = [
@@ -85,6 +85,15 @@ const columns = [
     id: "score",
     header: "score",
     cell: (c) => <ScorePill v={c.getValue()} />,
+  }),
+  col.accessor((r) => r.metrics?.security_findings_count ?? -1, {
+    id: "sec",
+    header: "sec",
+    cell: (c) => {
+      const v = c.getValue();
+      if (v < 0) return <span className="faint">—</span>;        // never scanned
+      return v > 0 ? <span style={{ color: "var(--bad)" }}>{v}</span> : <span className="faint">0</span>;
+    },
   }),
   col.accessor((r) => r.annotations?.resolution ?? "", {
     id: "resolution",

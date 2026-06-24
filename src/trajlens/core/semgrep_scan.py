@@ -12,6 +12,7 @@ not on every detail fetch.
 
 import json
 import os
+import functools
 import shutil
 import subprocess
 import tempfile
@@ -25,6 +26,18 @@ _SCANNABLE_OPS = {"create", "edit"}
 
 def semgrep_available() -> bool:
     return shutil.which("semgrep") is not None
+
+
+@functools.lru_cache(maxsize=1)
+def ruleset_version() -> str:
+    """Cache/staleness key. semgrep's own version is a good proxy — the bundled
+    `--config auto` rules move with releases, so a version bump invalidates caches."""
+    try:
+        out = subprocess.run(["semgrep", "--version"], capture_output=True,
+                             text=True, timeout=10)
+        return "semgrep-" + (out.stdout.strip() or "unknown")
+    except Exception:
+        return "semgrep-unknown"
 
 
 def _materialize(changes, tmpdir: str) -> int:
@@ -75,20 +88,22 @@ def scan_changes(items, timeout: int = 120) -> dict:
     if not semgrep_available():
         return {"available": False, "scanned": 0, "findings": []}
 
+    rv = ruleset_version()
     changes = extract_changes(items)
     with tempfile.TemporaryDirectory() as tmp:
         n = _materialize(changes, tmp)
         if n == 0:
-            return {"available": True, "scanned": 0, "findings": []}
+            return {"available": True, "scanned": 0, "findings": [], "ruleset_version": rv}
         try:
             proc = subprocess.run(
                 ["semgrep", "scan", "--config", "auto", "--json", "--quiet", tmp],
                 capture_output=True, text=True, timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            return {"available": True, "scanned": n, "findings": [], "error": "timeout"}
+            return {"available": True, "scanned": n, "findings": [], "error": "timeout",
+                    "ruleset_version": rv}
         findings = _parse_findings(proc.stdout)
-        return {"available": True, "scanned": n, "findings": findings}
+        return {"available": True, "scanned": n, "findings": findings, "ruleset_version": rv}
 
 
 if __name__ == "__main__":

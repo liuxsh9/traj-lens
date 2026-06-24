@@ -27,6 +27,7 @@ const FIELDS: FieldDef[] = [
   { key: "pushback_count", label: "pushback", type: "number", ops: ["≥", "≤", "="] },
   { key: "error_steps", label: "error steps", type: "number", ops: ["≥", "≤", "="] },
   { key: "score", label: "score", type: "number", ops: ["≥", "≤", "="] },
+  { key: "security_findings", label: "security", type: "number", ops: ["≥", "≤", "="] },
   { key: "tags", label: "tags", type: "tags", ops: ["∋", "∌"] },
 ];
 
@@ -39,6 +40,7 @@ function getVal(row: TrajSummary, field: string): unknown {
   const metricMap: Record<string, string> = {
     turns: "turn_count", steps: "step_count", tools: "tool_count",
     pushback_count: "pushback_count", error_steps: "error_steps", score: "success_score",
+    security_findings: "security_findings_count",
   };
   return row.metrics?.[metricMap[field]] ?? 0;
 }

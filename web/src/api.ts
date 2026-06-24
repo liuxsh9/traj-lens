@@ -47,6 +47,8 @@ export interface Trajectory {
   annotations?: Annotation[];
   code_changes?: CodeChange[];
   metrics?: Record<string, number | null>;
+  security_findings?: SemgrepFinding[];
+  security_scan?: { ruleset_version: string; scanned: number; finding_count: number; scanned_at: string } | null;
 }
 
 export interface TrajSummary {
@@ -240,11 +242,13 @@ export interface SemgrepResult {
   available: boolean;
   scanned: number;
   findings: SemgrepFinding[];
+  cached?: boolean;
   error?: string;
 }
 
-export async function scanSemgrep(hash: string): Promise<SemgrepResult> {
-  const r = await fetch(`/api/v1/trajectories/${hash}/semgrep`, { method: "POST" });
+export async function scanSemgrep(hash: string, force = false): Promise<SemgrepResult> {
+  const r = await fetch(`/api/v1/trajectories/${hash}/semgrep${force ? "?force=true" : ""}`,
+    { method: "POST" });
   if (!r.ok) throw new Error(`semgrep scan failed: ${r.status}`);
   return r.json();
 }
