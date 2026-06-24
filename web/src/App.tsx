@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { DatasetWall } from "./components/DatasetWall";
 import { DatasetDetail } from "./components/DatasetDetail";
 import { TrajectoryViewer } from "./components/TrajectoryViewer";
+import { useSticky } from "./useSticky";
 
 type View =
   | { page: "datasets" }
@@ -9,7 +9,7 @@ type View =
   | { page: "trajectory"; hash: string; datasetId?: string; datasetName?: string };
 
 export function App() {
-  const [view, setView] = useState<View>({ page: "datasets" });
+  const [view, setView] = useSticky<View>("view", { page: "datasets" });
 
   if (view.page === "trajectory") {
     return (

@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
+import { useSticky } from "../useSticky";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import {
   useReactTable,
@@ -103,10 +104,13 @@ const columns = [
 ];
 
 export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; datasetId?: string }) {
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState<number>(50);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [filterRules, setFilterRules] = useState<FilterRule[]>([]);
+  // persist list UI state per dataset so it survives opening a sample (which
+  // unmounts this view) and page reloads.
+  const k = `list:${datasetId ?? "_all"}`;
+  const [page, setPage] = useSticky(`${k}:page`, 0);
+  const [pageSize, setPageSize] = useSticky<number>(`${k}:size`, 50);
+  const [sorting, setSorting] = useSticky<SortingState>(`${k}:sort`, []);
+  const [filterRules, setFilterRules] = useSticky<FilterRule[]>(`${k}:filters`, []);
 
   // derive server params from UI state
   const sortBy = sorting[0]?.id ? (sortFieldMap[sorting[0].id] ?? "created_at") : "created_at";

@@ -212,7 +212,7 @@ function AddRulePopover({ def, enumOptions, tagOptions, inputRef, onCommit, onCa
       {def.type === "tags" && (
         <input ref={inputRef} className="filter-input-sm" type="text" placeholder="标签名"
           list="tag-opts" value={value} onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") onCancel(); }} />
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) submit(); if (e.key === "Escape") onCancel(); }} />
       )}
       {def.type === "tags" && (
         <datalist id="tag-opts">
