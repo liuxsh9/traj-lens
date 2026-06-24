@@ -19,6 +19,12 @@ uv run trajlens ingest tests/samples/claude_code/<some>.jsonl
 uv run trajlens serve            # http://127.0.0.1:8000 （API + 前端同一可部署物）
 ```
 
+**监听地址与端口**：默认只听本机 `127.0.0.1:8000`。部署到服务器、需要内网/局域网访问时，在 `.env` 设 `TRAJLENS_HOST=0.0.0.0`、按需改 `TRAJLENS_PORT`；命令行 `--host` / `--port` 优先级更高，可临时覆盖：
+
+```bash
+uv run trajlens serve --host 0.0.0.0 --port 9000   # 等价于在 .env 配置后直接 serve
+```
+
 > 私有环境完整部署（离线、systemd/Docker、反代、备份、可选 semgrep）→ **[docs/DEPLOY.md](docs/DEPLOY.md)**。
 
 ## 它做什么
