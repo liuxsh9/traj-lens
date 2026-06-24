@@ -230,12 +230,15 @@ def export(
 
 
 @app.command()
-def serve(host: str = "127.0.0.1", port: int = 8000, db: str = _DB, blob_dir: str = _BLOBS):
-    """Run the API + web viewer."""
+def serve(host: str = "127.0.0.1", port: int = 8000, db: str = _DB, blob_dir: str = _BLOBS,
+          reload: bool = False):
+    """Run the API + web viewer. Pass --reload for dev (auto-restart on code edits)."""
     import uvicorn
     os.environ["TRAJLENS_DB"] = db
     os.environ["TRAJLENS_BLOBS"] = blob_dir
-    uvicorn.run("trajlens.api.app:app", host=host, port=port)
+    # reload watches src/ and respawns workers; env vars above are inherited.
+    uvicorn.run("trajlens.api.app:app", host=host, port=port, reload=reload,
+                reload_dirs=["src"] if reload else None)
 
 
 if __name__ == "__main__":
