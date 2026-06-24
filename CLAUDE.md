@@ -41,6 +41,30 @@ docs/superpowers/specs/  # authoritative design doc
 - No unnecessary abstractions. No interface with one implementation.
 - Use `from __future__ import annotations` only if needed for <3.10 compat (we target 3.12).
 
+## Sample debugging cheatsheet
+
+DB file: `trajlens.db` (SQLite). Key lookup by `content_hash`.
+
+```sql
+-- 1. Trajectory metadata
+SELECT items_count, meta FROM trajectories WHERE content_hash = ?;
+
+-- 2. Trajectory-level annotations (resolution, topic, hard_interruption, etc.)
+SELECT annotator_id, value FROM annotations WHERE target_hash = ?;  -- target_hash = content_hash
+
+-- 3. Computed metrics (success_score, tool_count, turn_count, etc.)
+SELECT metric_id, value FROM metrics WHERE content_hash = ?;
+
+-- 4. Turn/step-level annotation targets
+SELECT target_hash, target_type, target_idx FROM annotation_targets WHERE content_hash = ?;
+-- Then query annotations for each target_hash to get per-step labels/scores.
+
+-- 5. Ingestion source
+SELECT source_path, batch_id FROM ingestions WHERE content_hash = ?;
+```
+
+Score formula (`success_score`): `{resolved:100, partially_resolved:50, unresolved:0}[resolution] - min(pushback_count * 5, base * 0.5)`. Logic in `metrics/builtins.py`.
+
 ## Git workflow
 
 - **All changes must be committed** — never leave meaningful work as unstaged modifications across sessions.
