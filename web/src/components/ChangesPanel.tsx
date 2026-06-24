@@ -83,9 +83,14 @@ function ChangeRow({ c, onJump, findings }: {
       )}
       <Diff c={c} />
       {findings.map((f, i) => (
-        <div key={i} className="mono" style={{ fontSize: 10.5, marginTop: 3, color: SEV_COLOR[f.severity] ?? "var(--dim)" }}
+        // introduced = attributed to this edit (colored by severity); pre-existing
+        // = inherited, dimmed + tagged so it doesn't read as the agent's fault.
+        <div key={i} className="mono" style={{ fontSize: 10.5, marginTop: 3,
+          color: f.introduced ? (SEV_COLOR[f.severity] ?? "var(--dim)") : "var(--faint)" }}
           title={f.check_id}>
-          ⚠ {f.severity}{f.line ? ` L${f.line}` : ""}: {f.message.split("\n")[0]}
+          ⚠ {f.severity}{f.line ? ` L${f.line}` : ""}
+          {f.introduced ? <span style={{ color: "var(--bad)" }}> 引入</span> : <span> 既存</span>}
+          : {f.message.split("\n")[0]}
         </div>
       ))}
       {src && preview && (
@@ -135,14 +140,14 @@ export function ChangesPanel({ changes, hash, onJump, persisted, scannedBefore }
 
   const scanLabel = () => {
     if (scanning) return "扫描中…";
-    if (scan) {
-      if (!scan.available) return "semgrep 未安装";
-      if (scan.error) return `扫描出错：${scan.error}`;
-      const tag = scan.cached ? "（缓存）" : "";
-      return `发现 ${scan.findings.length} 处${tag}`;
-    }
-    if (scannedBefore) return `已扫描 · ${shown.length} 处（缓存）`;
-    return null;
+    if (scan && !scan.available) return "semgrep 未安装";
+    if (scan?.error) return `扫描出错：${scan.error}`;
+    if (!scan && !scannedBefore) return null;
+    // introduced (agent's fault) is the headline; pre-existing is secondary
+    const intro = shown.filter((f) => f.introduced).length;
+    const pre = shown.length - intro;
+    const tag = scan?.cached || (!scan && scannedBefore) ? "（缓存）" : "";
+    return `引入 ${intro}${pre ? ` · 既存 ${pre}` : ""}${tag}`;
   };
 
   return (

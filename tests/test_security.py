@@ -21,18 +21,21 @@ def test_persist_findings_and_mirror_metric(tmp_path):
     ch = _seed(conn)
     findings = [
         {"item_idx": 14, "check_id": "dockerfile.last-user-is-root",
-         "severity": "ERROR", "message": "root", "line": 1},
-        {"item_idx": 14, "check_id": "x.y", "severity": "WARNING", "message": "w", "line": None},
+         "severity": "ERROR", "message": "root", "line": 1, "introduced": True},
+        {"item_idx": 14, "check_id": "x.y", "severity": "WARNING", "message": "w",
+         "line": None, "introduced": False},  # pre-existing
     ]
     repo.put_security_scan(conn, content_hash=ch, findings=findings,
                            scanned=3, ruleset_version="semgrep-1.2.3")
 
     got = repo.get_security_findings(conn, ch)
-    assert len(got) == 2 and got[0]["check_id"] == "dockerfile.last-user-is-root"
+    assert len(got) == 2
+    assert got[0]["introduced"] is True  # introduced sorted first
     scan = repo.get_security_scan(conn, ch)
-    assert scan["finding_count"] == 2 and scan["ruleset_version"] == "semgrep-1.2.3"
-    # mirrored into metrics so list/filter see it
-    assert repo.get_metrics_for_trajectory(conn, ch)["security_findings_count"] == 2
+    assert scan["finding_count"] == 2 and scan["introduced_count"] == 1
+    assert scan["ruleset_version"] == "semgrep-1.2.3"
+    # mirrored metric is the INTRODUCED count, not the total
+    assert repo.get_metrics_for_trajectory(conn, ch)["introduced_findings_count"] == 1
 
 
 def test_rescan_replaces_old_findings(tmp_path):
@@ -40,10 +43,10 @@ def test_rescan_replaces_old_findings(tmp_path):
     ch = _seed(conn)
     repo.put_security_scan(conn, content_hash=ch, scanned=1, ruleset_version="v1",
                            findings=[{"item_idx": 1, "check_id": "a", "severity": "ERROR",
-                                      "message": "m", "line": 2}])
+                                      "message": "m", "line": 2, "introduced": True}])
     repo.put_security_scan(conn, content_hash=ch, scanned=1, ruleset_version="v2", findings=[])
     assert repo.get_security_findings(conn, ch) == []
-    assert repo.get_metrics_for_trajectory(conn, ch)["security_findings_count"] == 0
+    assert repo.get_metrics_for_trajectory(conn, ch)["introduced_findings_count"] == 0
 
 
 def test_query_filters_by_security_findings(tmp_path):
@@ -51,10 +54,10 @@ def test_query_filters_by_security_findings(tmp_path):
     ch = _seed(conn)
     repo.put_security_scan(conn, content_hash=ch, scanned=2, ruleset_version="v1",
                            findings=[{"item_idx": 1, "check_id": "a", "severity": "ERROR",
-                                      "message": "m", "line": 1}])
+                                      "message": "m", "line": 1, "introduced": True}])
     # surfaced in list output
     row = repo.query_trajectories(conn)["items"][0]
-    assert row["metrics"]["security_findings_count"] == 1
+    assert row["metrics"]["introduced_findings_count"] == 1
     # filterable: ≥1 matches, ≥2 excludes
     assert repo.query_trajectories(conn, filters=[
         {"field": "security_findings", "op": "≥", "value": "1"}])["total"] == 1

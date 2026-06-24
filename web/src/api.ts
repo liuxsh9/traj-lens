@@ -236,12 +236,14 @@ export interface SemgrepFinding {
   severity: string;
   message: string;
   line: number | null;
+  introduced: boolean;   // true = added by this edit; false = pre-existing
 }
 
 export interface SemgrepResult {
   available: boolean;
   scanned: number;
   findings: SemgrepFinding[];
+  introduced_count?: number;
   cached?: boolean;
   error?: string;
 }

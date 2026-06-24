@@ -40,7 +40,7 @@ function getVal(row: TrajSummary, field: string): unknown {
   const metricMap: Record<string, string> = {
     turns: "turn_count", steps: "step_count", tools: "tool_count",
     pushback_count: "pushback_count", error_steps: "error_steps", score: "success_score",
-    security_findings: "security_findings_count",
+    security_findings: "introduced_findings_count",
   };
   return row.metrics?.[metricMap[field]] ?? 0;
 }

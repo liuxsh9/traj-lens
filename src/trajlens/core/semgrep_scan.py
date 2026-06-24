@@ -42,30 +42,41 @@ def ruleset_version() -> str:
         return "semgrep-unknown"
 
 
-def _materialize(changes, tmpdir: str) -> int:
-    """Write each scannable change's `new` content to <tmpdir>/<idx>__<basename>.
-    Returns the count written. Filename carries item_idx so findings map back.
+def _write(content: str, path: str, idx: int, root: str) -> None:
+    base = os.path.basename(path) or "file"
+    with open(os.path.join(root, f"{idx}{_SEP}{base}"), "w") as f:
+        f.write(content)
+
+
+def _materialize(changes, base_dir: str, head_dir: str) -> int:
+    """Write each scannable change's `new` to head_dir and its `old` (if any) to
+    base_dir, filename = <idx>__<basename>. Returns the head count (= fragments
+    actually scanned for the post-edit state). A create has no `old`, so its
+    baseline is empty and all its findings count as introduced.
     """
-    written = 0
+    n = 0
     for c in changes:
         if c.op not in _SCANNABLE_OPS or not c.new or not c.path:
             continue
-        base = os.path.basename(c.path) or "file"
-        with open(os.path.join(tmpdir, f"{c.item_idx}{_SEP}{base}"), "w") as f:
-            f.write(c.new)
-        written += 1
-    return written
+        _write(c.new, c.path, c.item_idx, head_dir)
+        if c.old:
+            _write(c.old, c.path, c.item_idx, base_dir)
+        n += 1
+    return n
 
 
 def _parse_findings(stdout: str) -> list[dict]:
-    """Map semgrep JSON output back to item-indexed findings."""
+    """Map semgrep JSON back to item-indexed findings, tagged with side (base/head)
+    via the parent dir the fragment was written into."""
     try:
         data = json.loads(stdout)
     except (json.JSONDecodeError, TypeError):
         return []
     out = []
     for r in data.get("results", []):
-        name = os.path.basename(r.get("path", ""))
+        p = r.get("path", "")
+        name = os.path.basename(p)
+        side = "base" if f"{os.sep}base{os.sep}" in p else "head"
         idx_str = name.split(_SEP, 1)[0]
         try:
             item_idx = int(idx_str)
@@ -73,6 +84,7 @@ def _parse_findings(stdout: str) -> list[dict]:
             continue
         extra = r.get("extra", {})
         out.append({
+            "side": side,
             "item_idx": item_idx,
             "check_id": r.get("check_id", ""),
             "severity": extra.get("severity", "INFO"),
@@ -82,20 +94,46 @@ def _parse_findings(stdout: str) -> list[dict]:
     return out
 
 
-def scan_changes(items, timeout: int = 120) -> dict:
-    """Extract code changes from items, scan with semgrep if available.
+def _diff_findings(parsed: list[dict]) -> list[dict]:
+    """Keep head-side findings, tagging each `introduced` = its (item_idx, check_id)
+    was NOT present pre-edit. A finding on both sides is pre-existing (the agent
+    inherited it), so it's not attributed to this edit.
 
-    Returns {available: bool, scanned: int, findings: [...], error?: str}.
+    ponytail: matches on (item_idx, check_id), not line — old/new line numbers
+    drift. Upgrade path if needed: count-aware diff (2 new vs 1 old of same rule).
+    """
+    base_keys = {(f["item_idx"], f["check_id"]) for f in parsed if f["side"] == "base"}
+    out = []
+    for f in parsed:
+        if f["side"] != "head":
+            continue
+        g = {k: v for k, v in f.items() if k != "side"}
+        g["introduced"] = (f["item_idx"], f["check_id"]) not in base_keys
+        out.append(g)
+    return out
+
+
+def scan_changes(items, timeout: int = 120) -> dict:
+    """Diff-scan code changes: scan both pre-edit (old) and post-edit (new)
+    fragments, attribute each post-edit finding as introduced-by-this-agent or
+    pre-existing.
+
+    Returns {available, scanned, findings: [...with introduced bool], introduced_count, ...}.
     """
     if not semgrep_available():
-        return {"available": False, "scanned": 0, "findings": []}
+        return {"available": False, "scanned": 0, "findings": [], "introduced_count": 0}
 
     rv = ruleset_version()
     changes = extract_changes(items)
     with tempfile.TemporaryDirectory() as tmp:
-        n = _materialize(changes, tmp)
+        base_dir = os.path.join(tmp, "base")
+        head_dir = os.path.join(tmp, "head")
+        os.makedirs(base_dir)
+        os.makedirs(head_dir)
+        n = _materialize(changes, base_dir, head_dir)
         if n == 0:
-            return {"available": True, "scanned": 0, "findings": [], "ruleset_version": rv}
+            return {"available": True, "scanned": 0, "findings": [],
+                    "introduced_count": 0, "ruleset_version": rv}
         try:
             proc = subprocess.run(
                 ["semgrep", "scan", "--config", "auto", "--json", "--quiet", tmp],
@@ -103,34 +141,25 @@ def scan_changes(items, timeout: int = 120) -> dict:
             )
         except subprocess.TimeoutExpired:
             return {"available": True, "scanned": n, "findings": [], "error": "timeout",
-                    "ruleset_version": rv}
-        findings = _parse_findings(proc.stdout)
-        return {"available": True, "scanned": n, "findings": findings, "ruleset_version": rv}
+                    "introduced_count": 0, "ruleset_version": rv}
+        findings = _diff_findings(_parse_findings(proc.stdout))
+        introduced = sum(1 for f in findings if f["introduced"])
+        return {"available": True, "scanned": n, "findings": findings,
+                "introduced_count": introduced, "ruleset_version": rv}
 
 
 if __name__ == "__main__":
-    # self-check: materialize + parse round-trip without needing semgrep.
-    from trajlens.core.model import FunctionCallItem
-
-    items = [
-        FunctionCallItem(name="write_file", call_id="1",
-                         arguments=json.dumps({"filePath": "/app/x.py",
-                                               "content": "x = 1\nprint(x)\n"})),
-        FunctionCallItem(name="read", call_id="2",
-                         arguments=json.dumps({"file_path": "/app/y.py"})),  # not scannable
+    # self-check: diff attribution without needing semgrep installed.
+    # rule A is in both old+new of item 14 -> pre-existing (not introduced).
+    # rule B is only in new of item 14 -> introduced.
+    parsed = [
+        {"side": "base", "item_idx": 14, "check_id": "A", "severity": "ERROR", "message": "a", "line": 1},
+        {"side": "head", "item_idx": 14, "check_id": "A", "severity": "ERROR", "message": "a", "line": 3},
+        {"side": "head", "item_idx": 14, "check_id": "B", "severity": "WARNING", "message": "b", "line": 5},
     ]
-    chs = extract_changes(items)
-    with tempfile.TemporaryDirectory() as tmp:
-        assert _materialize(chs, tmp) == 1
-        files = os.listdir(tmp)
-        assert files == ["0__x.py"], files  # item_idx 0 encoded in name
-
-    fake = json.dumps({"results": [{
-        "path": "/tmp/zz/0__x.py", "check_id": "rule.id",
-        "start": {"line": 2},
-        "extra": {"severity": "ERROR", "message": "example finding"},
-    }]})
-    f = _parse_findings(fake)
-    assert f == [{"item_idx": 0, "check_id": "rule.id",
-                  "severity": "ERROR", "message": "example finding", "line": 2}], f
-    print("ok: available=%s, parse+materialize round-trip passed" % semgrep_available())
+    diffed = _diff_findings(parsed)
+    assert len(diffed) == 2  # only head-side findings kept
+    by = {f["check_id"]: f["introduced"] for f in diffed}
+    assert by == {"A": False, "B": True}, by  # A pre-existing, B introduced
+    assert all("side" not in f for f in diffed)
+    print("ok: available=%s, diff attribution passed" % semgrep_available())

@@ -9,7 +9,7 @@ from trajlens.adapters import detect_and_parse
 def test_migrate_creates_tables_and_sets_version(tmp_path):
     conn = dbmod.connect(str(tmp_path / "t.db"))
     v = dbmod.migrate(conn)
-    assert v == 8
+    assert v == 9
     names = {r["name"] for r in conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"trajectories", "ingestions", "raw_blobs", "items",
@@ -19,8 +19,8 @@ def test_migrate_creates_tables_and_sets_version(tmp_path):
 
 def test_migrate_is_idempotent(tmp_path):
     conn = dbmod.connect(str(tmp_path / "t.db"))
-    assert dbmod.migrate(conn) == 8
-    assert dbmod.migrate(conn) == 8  # second run is a no-op
+    assert dbmod.migrate(conn) == 9
+    assert dbmod.migrate(conn) == 9  # second run is a no-op
 
 
 def test_wal_enabled(tmp_path):

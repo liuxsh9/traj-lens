@@ -86,7 +86,7 @@ const columns = [
     header: "score",
     cell: (c) => <ScorePill v={c.getValue()} />,
   }),
-  col.accessor((r) => r.metrics?.security_findings_count ?? -1, {
+  col.accessor((r) => r.metrics?.introduced_findings_count ?? -1, {
     id: "sec",
     header: "sec",
     cell: (c) => {
