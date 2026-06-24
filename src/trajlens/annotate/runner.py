@@ -108,35 +108,46 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
     if job_id:
         repo.update_job(conn, job_id, total=total, skipped=skipped)
 
-    # Phase 2: fire LLM calls concurrently, write results back serial
-    # ponytail: gather sends all at once; rate limiter in llm_client throttles to RPS/concurrency
+    # Phase 2: fire LLM calls concurrently; process each as it completes so the
+    # job's `done` count tracks real progress (the wait is in the LLM calls, not
+    # the DB writes — updating only after gather() shows 0/N for minutes).
+    # ponytail: rate limiter in llm_client throttles concurrency; as_completed
+    # just changes when we observe each result, not how many run at once.
     if pending:
         log.info("annotator %s: launching %d LLM calls concurrently", spec.id, len(pending))
+        by_messages = {id(m): (ch, th, unit, ih) for (ch, th, unit, m, ih) in pending}
 
         async def _call_llm(messages):
             content, _usage = await chat_completion(
                 profile, messages,
                 json_schema=getattr(annotator_mod, "SCHEMA", None))
-            return content
+            return id(messages), content
 
-        results = await asyncio.gather(
-            *[_call_llm(m) for (_, _, _, m, _) in pending],
-            return_exceptions=True)
-
-        for (ch, th, unit, messages, ih), result in zip(pending, results):
-            if isinstance(result, Exception):
-                log.exception("annotator %s failed on target %s: %s", spec.id, th, result)
-                errors.append({"content_hash": ch, "target_hash": th, "error": str(result)})
-                continue
+        progress_interval = max(1, len(pending) // 20)
+        completed = 0
+        for fut in asyncio.as_completed([_call_llm(m) for (_, _, _, m, _) in pending]):
+            completed += 1
             try:
-                value = annotator_mod.parse(result)
+                msg_id, content = await fut
+                ch, th, unit, ih = by_messages[msg_id]
+                value = annotator_mod.parse(content)
                 repo.put_annotation(
                     conn, target_hash=th, annotator_id=spec.id,
                     annotator_version=spec.version, value=value, inputs_hash=ih)
                 done += 1
             except Exception as exc:  # noqa: BLE001
-                log.exception("annotator %s parse failed on %s", spec.id, th)
-                errors.append({"content_hash": ch, "target_hash": th, "error": str(exc)})
+                log.exception("annotator %s LLM/parse failed: %s", spec.id, exc)
+                errors.append({"error": str(exc)})
+            if job_id and completed % progress_interval == 0:
+                repo.update_job(conn, job_id, done=done)
+
+    # mark the job done BEFORE the metric recompute below — recompute walks every
+    # trajectory (CPU+DB heavy, minutes at scale) and must not block the UI from
+    # seeing the annotations that are already written.
+    result = {"total": total, "done": done, "skipped": skipped, "errors": errors}
+    if job_id:
+        repo.update_job(conn, job_id, status="done", total=total, done=done,
+                        skipped=skipped, errors=json.dumps(errors, ensure_ascii=False))
 
     # ponytail: invalidate cached metrics that depend on this annotator, then
     # recompute so the metrics table is repopulated (web read path has no lazy
@@ -146,10 +157,6 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
         _invalidate_dependent_metrics(conn, spec.id)
         _recompute_metrics(conn, content_hashes)
 
-    result = {"total": total, "done": done, "skipped": skipped, "errors": errors}
-    if job_id:
-        repo.update_job(conn, job_id, status="done", total=total, done=done,
-                        skipped=skipped, errors=json.dumps(errors, ensure_ascii=False))
     return result
 
 
