@@ -5,6 +5,7 @@ import { SessionHeader } from "./SessionHeader";
 import { Minimap } from "./Minimap";
 import { CardStack, PinnedUser, PinnedReply } from "./CardStack";
 import { TrimBar } from "./TrimBar";
+import { ChangesPanel } from "./ChangesPanel";
 
 export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () => void }) {
   const { data: traj, error, isLoading } = useQuery({
@@ -152,6 +153,7 @@ export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () =>
           onExpandAll={onExpandAll}
           onCollapseAll={onCollapseAll}
         />
+        <ChangesPanel changes={traj.code_changes ?? []} onJump={onClickTick} />
         {firstUserTurn && (
           <PinnedUser
             items={firstUserTurn.items}

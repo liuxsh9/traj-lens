@@ -270,10 +270,11 @@
 - [ ] Semgrep pre/post 安全扫描（agent 引入漏洞数 = post findings − pre baseline）
 
 ### 工具调用代码可观测（从轨迹中提取代码变更）
-- [ ] 从 function_call（write/edit/bash）中提取代码 diff / 配置变更
+- [x] 从 function_call（write/edit/bash）中提取代码 diff — `core/code_changes.py`（读时投影，复用 tool_aliases；str_replace_editor command 子类型分流；codex shell_command 别名补全）
+- [x] 代码变更时间线（哪个 step 改了哪个文件 + old→new diff 片段）— `ChangesPanel.tsx`，API 详情叠加 `code_changes`
+- [ ] 变更类型细分：delete/config（当前 bash 统一 op=run，rm/mv/touch 嗅探留作升级路径）
 - [ ] Semgrep 对提取的代码片段做安全扫描（不依赖 artifacts，直接分析轨迹内工具输出）
 - [ ] HTML/SVG/Mermaid 等可视化语言外置预览（viewer 内 iframe sandbox 渲染）
-- [ ] 代码变更时间线（哪个 step 改了哪个文件，变更类型分类：新建/修改/删除/配置）
 
 ### 可集成性（§11）
 - [ ] API-key 可选鉴权

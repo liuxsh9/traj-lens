@@ -27,12 +27,25 @@ export interface Annotation {
   target_idx?: number;
 }
 
+export interface CodeChange {
+  item_idx: number;
+  step_id: number | null;
+  run_id: number | null;
+  tool: string;
+  op: "create" | "edit" | "delete" | "run";
+  path: string | null;
+  old: string | null;
+  new: string | null;
+  command: string | null;
+}
+
 export interface Trajectory {
   content_hash: string;
   items: Item[];
   tools: unknown[];
   meta: Record<string, unknown>;
   annotations?: Annotation[];
+  code_changes?: CodeChange[];
 }
 
 export interface TrajSummary {
@@ -178,6 +191,16 @@ export interface JobInfo {
   done?: number;
   skipped?: number;
   errors?: string;
+}
+
+export async function computeMetrics(datasetId?: string): Promise<{ computed: number }> {
+  const r = await fetch("/api/v1/metrics/compute", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datasetId ? { dataset_id: datasetId } : {}),
+  });
+  if (!r.ok) throw new Error(`compute metrics failed: ${r.status}`);
+  return r.json();
 }
 
 export async function createJob(annotatorPath: string, datasetId?: string): Promise<JobInfo> {

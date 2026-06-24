@@ -12,6 +12,7 @@ _ALIASES: dict[str, str] = {
     "terminal": "bash",
     "run_command": "bash",
     "shell": "bash",
+    "shell_command": "bash",  # codex
     # ── file read ──
     "read_file": "read",
     "cat": "read",

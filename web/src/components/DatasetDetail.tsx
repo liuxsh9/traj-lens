@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   listBatches, getDatasetStats, listAnnotators, uploadToDataset,
-  createJob, getJob,
+  createJob, getJob, computeMetrics,
   type Batch, type DatasetStats, type AnnotatorInfo, type JobInfo,
 } from "../api";
 import { ListView } from "./ListView";
@@ -181,6 +181,21 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
   });
   const [activeJobs, setActiveJobs] = useState<JobInfo[]>([]);
   const [running, setRunning] = useState(false);
+  const [metricsMsg, setMetricsMsg] = useState<string | null>(null);
+
+  // Recompute metrics (annotation-independent ones aren't touched by the
+  // annotator path; this fills/refreshes them) then refresh the views.
+  const runMetrics = async () => {
+    setMetricsMsg("Computing…");
+    try {
+      const { computed } = await computeMetrics(datasetId);
+      setMetricsMsg(`Metrics computed · ${computed} trajectories`);
+      qc.invalidateQueries({ queryKey: ["stats", datasetId] });
+      qc.invalidateQueries({ queryKey: ["trajectories"] });
+    } catch {
+      setMetricsMsg("Metrics failed");
+    }
+  };
 
   // Poll active jobs
   useEffect(() => {
@@ -196,6 +211,9 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
       );
       setActiveJobs(updated);
       if (updated.every((j) => j.status !== "pending")) {
+        // annotators recompute their own dependent metrics; this also fills
+        // annotation-independent ones (tool_count, etc.) before refreshing.
+        await computeMetrics(datasetId).catch(() => {});
         qc.invalidateQueries({ queryKey: ["stats", datasetId] });
         qc.invalidateQueries({ queryKey: ["trajectories"] });
       }
@@ -231,6 +249,11 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
         <button className="btn btn-sm" onClick={runAll} disabled={running || annotators.length === 0}>
           {running ? "Starting…" : "Run All Annotators"}
         </button>
+        <button className="btn btn-sm btn-ghost" onClick={runMetrics}
+          title="Fill missing & refresh stale metrics (e.g. success_score) without re-running annotators">
+          Compute Metrics
+        </button>
+        {metricsMsg && <span className="dim" style={{ fontSize: 12 }}>{metricsMsg}</span>}
         {annotators.map((a) => (
           <button
             key={a.id}

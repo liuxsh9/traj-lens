@@ -70,6 +70,9 @@ def get_one(content_hash: str, conn: sqlite3.Connection = Depends(_conn)):
         raise HTTPException(status_code=404, detail="not found")
     result = traj.model_dump()
     result["annotations"] = repo.get_annotations_for_trajectory(conn, content_hash)
+    # read-time projection of file edits/creates + shell runs (slice-5)
+    from trajlens.core.code_changes import changes_as_dicts
+    result["code_changes"] = changes_as_dicts(traj.items)
     return result
 
 
@@ -114,6 +117,23 @@ def create_job(request: Request, body: dict = Body(...),
 
     threading.Thread(target=_run, daemon=True).start()
     return {"job_id": job_id, "annotator_id": spec.id, "status": "pending"}
+
+
+@router.post("/api/v1/metrics/compute")
+def compute_metrics_endpoint(body: dict = Body(default={}),
+                             conn: sqlite3.Connection = Depends(_conn)):
+    """(Re)compute metrics for a dataset (or all). Staleness-aware: fills
+    missing, refreshes stale, skips up-to-date. Cheap & synchronous —
+    metrics are pure functions of stored trajectory + annotations."""
+    from trajlens.metrics import compute_metrics
+    import trajlens.metrics.builtins  # noqa: F401 — registers metrics
+
+    dataset_id = body.get("dataset_id")
+    hashes = [t["content_hash"] for t in
+              repo.list_trajectories(conn, dataset_id=dataset_id)]
+    for ch in hashes:
+        compute_metrics(conn, ch)
+    return {"computed": len(hashes)}
 
 
 @router.get("/api/v1/jobs/{job_id}")
