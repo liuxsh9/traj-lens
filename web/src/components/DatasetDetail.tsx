@@ -19,6 +19,13 @@ const RES_COLORS: Record<string, string> = {
   resolved: "var(--good)", partially_resolved: "var(--warn)",
   unresolved: "var(--bad)", indeterminate: "var(--faint)",
 };
+const RES_ORDER = ["resolved", "partially_resolved", "unresolved", "indeterminate"];
+
+function orderedResolution(resolution: Record<string, number>): [string, number][] {
+  const known = RES_ORDER.filter((k) => k in resolution).map((k) => [k, resolution[k]] as [string, number]);
+  const extra = Object.entries(resolution).filter(([k]) => !RES_ORDER.includes(k));
+  return [...known, ...extra];
+}
 
 function StatsPanel({ stats }: { stats: DatasetStats }) {
   const resTotal = Object.values(stats.resolution).reduce((a, b) => a + b, 0) || 1;
@@ -49,7 +56,7 @@ function StatsPanel({ stats }: { stats: DatasetStats }) {
         <div className="stat-card" style={{ flex: 2 }}>
           <div className="dim" style={{ fontSize: 11, marginBottom: 4 }}>resolution</div>
           <div className="res-bar">
-            {Object.entries(stats.resolution).map(([k, v]) => (
+            {orderedResolution(stats.resolution).map(([k, v]) => (
               <div
                 key={k}
                 title={`${k}: ${v}`}
@@ -62,8 +69,10 @@ function StatsPanel({ stats }: { stats: DatasetStats }) {
             ))}
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 3, fontSize: 10 }}>
-            {Object.entries(stats.resolution).map(([k, v]) => (
-              <span key={k} className="dim">{k}: {v}</span>
+            {orderedResolution(stats.resolution).map(([k, v]) => (
+              <span key={k} className="dim">
+                <span style={{ color: RES_COLORS[k] || "var(--faint)" }}>●</span> {k}: {v}
+              </span>
             ))}
           </div>
         </div>
