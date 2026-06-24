@@ -42,6 +42,70 @@ def test_resolution_caps_large_session():
     assert _payload_bytes(msgs) < MAX_PAYLOAD_BYTES
 
 
+# ── resolution: ending signal catches mid-task sessions ──────────────
+
+def test_resolution_flags_mid_task_ending():
+    """A session ending with the agent still working must surface as such in the
+    prompt, so the judge doesn't mark in-progress work as resolved."""
+    from trajlens.annotate.llm import resolution
+
+    items = [
+        MessageItem(role="user", content="add a parser"),
+        MessageItem(role="assistant", content="Sounds good. Next, I'll start implementing the tokenizer."),
+        FunctionCallItem(name="edit", arguments='{"p":"lex.py"}', call_id="c1"),
+    ]
+    prompt = resolution.build(items, items)[-1]["content"]
+    assert "How the session ends:" in prompt
+    # ends on a tool call → mid-action flag present
+    assert "still working" in prompt
+    # final assistant message shown verbatim so "Next, I'll…" is visible
+    assert "Next, I'll start implementing the tokenizer" in prompt
+
+
+def test_resolution_ending_shows_completion():
+    from trajlens.annotate.llm import resolution
+
+    items = [
+        MessageItem(role="user", content="add a parser"),
+        MessageItem(role="assistant", content="Done — all 12 tests pass."),
+    ]
+    prompt = resolution.build(items, items)[-1]["content"]
+    assert "Done — all 12 tests pass." in prompt
+    assert "still working" not in prompt
+
+
+def test_resolution_flags_search_only_pattern():
+    """Sample 003263a2 shape: a research question answered only with tool calls
+    and short 'let me read X' transitions, never a synthesized answer."""
+    from trajlens.annotate.llm import resolution
+
+    items = [MessageItem(role="user",
+                         content="How does the code create structural information gaps?")]
+    for i in range(8):
+        items.append(MessageItem(role="assistant", content="Let me read the next file."))
+        items.append(FunctionCallItem(name="Read", arguments=f'{{"p":"f{i}.py"}}', call_id=f"c{i}"))
+        items.append(FunctionCallOutputItem(call_id=f"c{i}", output="some code"))
+
+    prompt = resolution.build(items, items)[-1]["content"]
+    assert "Search-only pattern" in prompt
+    assert "8 tool calls" in prompt
+    # ends on a tool output → mid-action flag also present
+    assert "still working" in prompt
+
+
+def test_resolution_no_false_search_only_when_answered():
+    from trajlens.annotate.llm import resolution
+
+    items = [MessageItem(role="user", content="How does X work?")]
+    for i in range(8):
+        items.append(FunctionCallItem(name="Read", arguments=f'{{"p":"f{i}.py"}}', call_id=f"c{i}"))
+        items.append(FunctionCallOutputItem(call_id=f"c{i}", output="code"))
+    items.append(MessageItem(role="assistant", content="X works by " + "detailed explanation " * 20))
+
+    prompt = resolution.build(items, items)[-1]["content"]
+    assert "Search-only pattern" not in prompt
+
+
 # ── topic: first_user + last_asst capped ─────────────────────────────
 
 def test_topic_caps_large_session():

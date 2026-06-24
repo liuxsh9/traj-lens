@@ -4,3 +4,6 @@ target: session
 context: whole
 module: trajlens.annotate.llm.resolution
 profile: default
+# bump when the prompt/build logic changes — compute_version only hashes this
+# YAML, so a prompt edit needs a version touch to invalidate cached annotations.
+prompt_version: 3  # 3: flag search-only (gather-but-never-answer) sessions
