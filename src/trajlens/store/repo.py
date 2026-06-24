@@ -327,10 +327,18 @@ def get_job(conn, job_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def list_trajectories(conn) -> list[dict]:
-    rows = conn.execute(
-        "SELECT content_hash, items_count, created_at FROM trajectories"
-        " ORDER BY created_at DESC").fetchall()
+def list_trajectories(conn, *, dataset_id: str | None = None) -> list[dict]:
+    if dataset_id:
+        rows = conn.execute(
+            "SELECT DISTINCT t.content_hash, t.items_count, t.created_at"
+            " FROM trajectories t"
+            " JOIN ingestions i ON i.content_hash = t.content_hash"
+            " JOIN batches b ON b.id = i.batch_id AND b.dataset_id = ?"
+            " ORDER BY t.created_at DESC", (dataset_id,)).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT content_hash, items_count, created_at FROM trajectories"
+            " ORDER BY created_at DESC").fetchall()
     return [dict(r) for r in rows]
 
 

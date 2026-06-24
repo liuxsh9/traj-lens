@@ -1,6 +1,10 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { listBatches, getDatasetStats, type Batch, type DatasetStats } from "../api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  listBatches, getDatasetStats, listAnnotators, uploadToDataset,
+  createJob, getJob,
+  type Batch, type DatasetStats, type AnnotatorInfo, type JobInfo,
+} from "../api";
 import { ListView } from "./ListView";
 
 interface Props {
@@ -84,7 +88,154 @@ function StatsPanel({ stats }: { stats: DatasetStats }) {
   );
 }
 
+/* ── Upload dropzone ─────────────────────────────────────────────── */
+
+function UploadZone({ datasetId, onDone }: { datasetId: string; onDone: () => void }) {
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<{ count: number; errors_count: number } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const doUpload = useCallback(async (file: File) => {
+    setUploading(true);
+    setResult(null);
+    try {
+      const r = await uploadToDataset(datasetId, file);
+      setResult({ count: r.count, errors_count: r.errors_count });
+      onDone();
+    } catch (e) {
+      setResult({ count: 0, errors_count: -1 });
+    } finally {
+      setUploading(false);
+    }
+  }, [datasetId, onDone]);
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) doUpload(file);
+  }, [doUpload]);
+
+  return (
+    <div
+      className={`upload-zone ${dragging ? "upload-zone-active" : ""}`}
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={onDrop}
+      onClick={() => fileRef.current?.click()}
+    >
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".jsonl,.json"
+        style={{ display: "none" }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f); }}
+      />
+      {uploading ? (
+        <span>Uploading…</span>
+      ) : result ? (
+        <span>
+          {result.errors_count === -1
+            ? "Upload failed"
+            : `${result.count} imported${result.errors_count > 0 ? `, ${result.errors_count} errors` : ""}`
+          }
+          {" · "}click to upload another
+        </span>
+      ) : (
+        <span>Drop JSONL file here or click to upload</span>
+      )}
+    </div>
+  );
+}
+
+/* ── Annotator runner ─────────────────────────────────────────────── */
+
+function AnnotatePanel({ datasetId }: { datasetId: string }) {
+  const qc = useQueryClient();
+  const { data: annotators = [] } = useQuery({
+    queryKey: ["annotators"],
+    queryFn: listAnnotators,
+  });
+  const [activeJobs, setActiveJobs] = useState<JobInfo[]>([]);
+  const [running, setRunning] = useState(false);
+
+  // Poll active jobs
+  useEffect(() => {
+    const pending = activeJobs.filter((j) => j.status === "pending");
+    if (pending.length === 0) return;
+    const timer = setInterval(async () => {
+      const updated = await Promise.all(
+        activeJobs.map((j) => (j.status === "pending" ? getJob(j.job_id) : j))
+      );
+      setActiveJobs(updated);
+      if (updated.every((j) => j.status !== "pending")) {
+        qc.invalidateQueries({ queryKey: ["stats", datasetId] });
+        qc.invalidateQueries({ queryKey: ["trajectories"] });
+      }
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [activeJobs, datasetId, qc]);
+
+  const runAll = async () => {
+    setRunning(true);
+    try {
+      const jobs = await Promise.all(
+        annotators.map((a) => createJob(a.path, datasetId))
+      );
+      setActiveJobs(jobs);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const runOne = async (a: AnnotatorInfo) => {
+    const job = await createJob(a.path, datasetId);
+    setActiveJobs((prev) => [...prev, job]);
+  };
+
+  return (
+    <div className="annotate-panel">
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button className="btn btn-sm" onClick={runAll} disabled={running || annotators.length === 0}>
+          {running ? "Starting…" : "Run All Annotators"}
+        </button>
+        {annotators.map((a) => (
+          <button
+            key={a.id}
+            className="btn btn-sm btn-ghost"
+            onClick={() => runOne(a)}
+            title={`${a.type} · target: ${a.target}`}
+          >
+            {a.id}
+            <span className="dim" style={{ marginLeft: 4, fontSize: 10 }}>
+              ({a.type})
+            </span>
+          </button>
+        ))}
+      </div>
+      {activeJobs.length > 0 && (
+        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap", fontSize: 12 }}>
+          {activeJobs.map((j) => (
+            <span key={j.job_id} className="chip chip-sm">
+              {j.annotator_id}:{" "}
+              {j.status === "pending" ? (
+                <span style={{ color: "var(--warn)" }}>running…{j.done != null ? ` ${j.done}/${j.total}` : ""}</span>
+              ) : (
+                <span style={{ color: "var(--good)" }}>done {j.done}/{j.total}</span>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Main component ──────────────────────────────────────────────── */
+
 export function DatasetDetail({ datasetId, datasetName, onBack, onOpen }: Props) {
+  const qc = useQueryClient();
   const [showStats, setShowStats] = useState(true);
   const { data: batches = [] } = useQuery({
     queryKey: ["batches", datasetId],
@@ -94,6 +245,12 @@ export function DatasetDetail({ datasetId, datasetName, onBack, onOpen }: Props)
     queryKey: ["stats", datasetId],
     queryFn: () => getDatasetStats(datasetId),
   });
+
+  const refreshAll = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ["batches", datasetId] });
+    qc.invalidateQueries({ queryKey: ["stats", datasetId] });
+    qc.invalidateQueries({ queryKey: ["trajectories"] });
+  }, [qc, datasetId]);
 
   return (
     <div className="page">
@@ -111,6 +268,10 @@ export function DatasetDetail({ datasetId, datasetName, onBack, onOpen }: Props)
       </div>
 
       {showStats && stats && <StatsPanel stats={stats} />}
+
+      <UploadZone datasetId={datasetId} onDone={refreshAll} />
+
+      <AnnotatePanel datasetId={datasetId} />
 
       {batches.length > 0 && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>

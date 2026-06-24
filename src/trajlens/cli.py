@@ -132,18 +132,31 @@ def ingest(
 @app.command()
 def annotate(
     config_path: str = typer.Argument(..., help="Annotator YAML config path"),
+    dataset: str = typer.Option("", help="Restrict to a dataset (name or id). Empty = all."),
     db: str = _DB,
 ):
-    """Run an annotator on all stored trajectories."""
+    """Run an annotator on stored trajectories."""
     import asyncio
     from trajlens.annotate.runner import load_annotator_config, load_annotator_module, run_annotator
-    from trajlens.store import db as dbmod
+    from trajlens.store import db as dbmod, repo
 
     conn = dbmod.connect(db)
     dbmod.migrate(conn)
     spec = load_annotator_config(config_path)
     mod = load_annotator_module(spec)
-    typer.echo(f"Running {spec.id}@{spec.version} ({spec.type}, target={spec.target.value})")
+
+    content_hashes = None
+    ds_label = "all"
+    if dataset:
+        ds = conn.execute("SELECT id, name FROM datasets WHERE name=? OR id=?",
+                          (dataset, dataset)).fetchone()
+        if not ds:
+            typer.echo(f"dataset '{dataset}' not found", err=True)
+            raise typer.Exit(1)
+        content_hashes = [t["content_hash"] for t in repo.list_trajectories(conn, dataset_id=ds["id"])]
+        ds_label = ds["name"]
+
+    typer.echo(f"Running {spec.id}@{spec.version} ({spec.type}, target={spec.target.value}, dataset={ds_label})")
 
     profiles = None
     if spec.type == "llm":
@@ -151,7 +164,7 @@ def annotate(
         profiles = load_profiles()
 
     result = asyncio.run(run_annotator(
-        conn, spec, mod, llm_profiles=profiles))
+        conn, spec, mod, content_hashes=content_hashes, llm_profiles=profiles))
     typer.echo(json.dumps(result, indent=2))
 
 

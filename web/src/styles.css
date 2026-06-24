@@ -733,3 +733,19 @@ table.list {
   display: flex; height: 8px; border-radius: 4px; overflow: hidden;
   background: var(--border-light);
 }
+
+/* ── Upload zone ── */
+.upload-zone {
+  border: 2px dashed var(--border); border-radius: 8px;
+  padding: 16px; text-align: center; cursor: pointer;
+  color: var(--dim); font-size: 13px; margin-bottom: 12px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.upload-zone:hover { border-color: var(--accent); background: var(--panel); }
+.upload-zone-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
+
+/* ── Annotate panel ── */
+.annotate-panel {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px; margin-bottom: 12px;
+}

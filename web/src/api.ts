@@ -140,6 +140,62 @@ export async function getDatasetStats(datasetId: string): Promise<DatasetStats> 
   return r.json();
 }
 
+// ── Upload / Annotate API ───────────────────────────────────────────
+
+export interface UploadResult {
+  count: number;
+  errors_count: number;
+  errors: string[];
+  batch_id: string | null;
+}
+
+export async function uploadToDataset(datasetId: string, file: File): Promise<UploadResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const r = await fetch(`/api/v1/datasets/${datasetId}/upload`, { method: "POST", body: form });
+  if (!r.ok) throw new Error(`upload failed: ${r.status}`);
+  return r.json();
+}
+
+export interface AnnotatorInfo {
+  id: string;
+  type: string;
+  target: string;
+  path: string;
+}
+
+export async function listAnnotators(): Promise<AnnotatorInfo[]> {
+  const r = await fetch("/api/v1/annotators");
+  if (!r.ok) throw new Error(`list annotators failed: ${r.status}`);
+  return r.json();
+}
+
+export interface JobInfo {
+  job_id: string;
+  annotator_id: string;
+  status: string;
+  total?: number;
+  done?: number;
+}
+
+export async function createJob(annotatorPath: string, datasetId?: string): Promise<JobInfo> {
+  const body: Record<string, string> = { annotator: annotatorPath };
+  if (datasetId) body.dataset_id = datasetId;
+  const r = await fetch("/api/v1/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`create job failed: ${r.status}`);
+  return r.json();
+}
+
+export async function getJob(jobId: string): Promise<JobInfo> {
+  const r = await fetch(`/api/v1/jobs/${jobId}`);
+  if (!r.ok) throw new Error(`get job failed: ${r.status}`);
+  return r.json();
+}
+
 export async function getTrajectory(hash: string): Promise<Trajectory> {
   const r = await fetch(`/api/v1/trajectories/${hash}`);
   if (!r.ok) throw new Error(`get failed: ${r.status}`);

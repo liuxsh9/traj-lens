@@ -5,7 +5,7 @@ import threading
 import uuid
 from typing import Generator
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile
 
 from trajlens.adapters import detect_and_parse
 from trajlens.store import db as dbmod, repo
@@ -79,6 +79,7 @@ def create_job(request: Request, body: dict = Body(...),
     config_path = body.get("annotator")
     if not config_path:
         raise HTTPException(status_code=422, detail="'annotator' config path required")
+    dataset_id = body.get("dataset_id")
 
     from trajlens.annotate.runner import load_annotator_config, load_annotator_module, run_annotator
 
@@ -91,14 +92,18 @@ def create_job(request: Request, body: dict = Body(...),
         from trajlens.annotate.llm_client import load_profiles
         profiles = load_profiles()
 
-    # Background thread gets its own connection
+    content_hashes = None
+    if dataset_id:
+        content_hashes = [t["content_hash"] for t in
+                          repo.list_trajectories(conn, dataset_id=dataset_id)]
+
     db_path = request.app.state.db_path
 
     def _run():
         bg_conn = dbmod.connect(db_path)
         try:
             asyncio.run(run_annotator(bg_conn, spec, mod, llm_profiles=profiles,
-                                      job_id=job_id))
+                                      content_hashes=content_hashes, job_id=job_id))
         finally:
             bg_conn.close()
 
@@ -112,6 +117,28 @@ def get_job(job_id: str, conn: sqlite3.Connection = Depends(_conn)):
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
     return dict(job)
+
+
+# ── Annotator discovery ──────────────────────────────────────────────
+
+@router.get("/api/v1/annotators")
+def list_annotators():
+    """List available annotator configs from config/annotators/."""
+    import pathlib, yaml  # noqa: E401
+    configs_dir = pathlib.Path("config/annotators")
+    if not configs_dir.is_dir():
+        return []
+    result = []
+    for p in sorted(configs_dir.glob("*.yaml")):
+        with open(p) as f:
+            cfg = yaml.safe_load(f)
+        result.append({
+            "id": cfg.get("id", p.stem),
+            "type": cfg.get("type", "unknown"),
+            "target": cfg.get("target", "unknown"),
+            "path": str(p),
+        })
+    return result
 
 
 # ── Dataset / Batch endpoints ─────────────────────────────────────────
@@ -157,6 +184,50 @@ def dataset_stats(dataset_id: str, conn: sqlite3.Connection = Depends(_conn)):
     if ds is None:
         raise HTTPException(status_code=404, detail="dataset not found")
     return repo.get_dataset_stats(conn, dataset_id)
+
+
+@router.post("/api/v1/datasets/{dataset_id}/upload")
+async def upload_to_dataset(
+    dataset_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+    conn: sqlite3.Connection = Depends(_conn),
+):
+    """Upload a JSONL file into a dataset. Each line = one trajectory."""
+    ds = repo.get_dataset(conn, dataset_id)
+    if ds is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+
+    blob_dir = request.app.state.blob_dir
+    content = (await file.read()).decode("utf-8")
+    fname = file.filename or "upload.jsonl"
+
+    batch = None
+    count = 0
+    errors: list[str] = []
+
+    for i, line in enumerate(content.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+            traj, fmt = detect_and_parse(obj)
+            if batch is None:
+                batch = repo.create_batch(conn, dataset_id=dataset_id, format=fmt,
+                                          name=fname, source_info={"filename": fname, "source": "upload"})
+            repo.put_trajectory(conn, traj, source_path=fname,
+                                raw_bytes=line.encode("utf-8"),
+                                blob_dir=blob_dir, batch_id=batch["id"])
+            count += 1
+        except Exception as e:
+            errors.append(f"line {i+1}: {e}")
+
+    if batch:
+        repo.update_batch_count(conn, batch["id"], count)
+
+    return {"count": count, "errors_count": len(errors),
+            "errors": errors[:20], "batch_id": batch["id"] if batch else None}
 
 
 @router.post("/api/v1/exports")
