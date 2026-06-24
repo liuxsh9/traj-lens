@@ -17,6 +17,7 @@ venv/
 # Node / web
 node_modules/
 web/dist/
+web/*.tsbuildinfo
 
 # Env / secrets
 .env
