@@ -7,6 +7,7 @@ import {
 } from "../api";
 import { ListView } from "./ListView";
 import { useSticky } from "../useSticky";
+import { summarizeAnnotatorProgress } from "./annotatorProgress";
 
 interface Props {
   datasetId: string;
@@ -377,19 +378,11 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
       {(activeJobs.length > 0 || metrics) && (
         <>
           {activeJobs.some((j) => j.status === "pending") && (() => {
-            // Aggregate progress across every annotator job in this "Run All".
-            // A job only publishes its real `total` after its Phase-1 enumeration
-            // finishes, so the denominator fills in over the first few polls.
-            const sum = (k: "done" | "skipped") =>
-              activeJobs.reduce((s, j) => s + (j[k] ?? 0), 0);
-            const total = activeJobs.reduce((s, j) => s + (j.total ?? 0), 0);
-            const finished = sum("done") + sum("skipped");
-            const pct = total ? Math.round((finished / total) * 100) : 0;
-            const pending = activeJobs.filter((j) => j.status === "pending").length;
+            const { finished, total, pct, pending } = summarizeAnnotatorProgress(activeJobs);
             return (
               <div style={{ marginTop: 8 }}>
                 <div className="dim" style={{ fontSize: 11 }}>
-                  Annotating · {finished}/{total || "…"}{total ? ` (${pct}%)` : ""} · {pending} job{pending === 1 ? "" : "s"} left
+                  Annotating · {finished}/{total ?? "…"} known targets · {pct}% overall · {pending} job{pending === 1 ? "" : "s"} left
                 </div>
                 <div className="res-bar" style={{ marginTop: 3 }}>
                   <div style={{ width: `${pct}%`, background: "var(--warn)", minWidth: pct > 0 ? 4 : 0 }} />
