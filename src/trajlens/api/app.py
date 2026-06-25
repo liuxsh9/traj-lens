@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 
 from trajlens.store import db as dbmod
+from trajlens.store import repo
 from trajlens.api.routes import router
 
 # ponytail: web/dist is the vite build output; serve if present, skip if not
@@ -19,6 +20,9 @@ def create_app(db_path: str | None = None, blob_dir: str | None = None) -> FastA
     # Migrate once at startup
     conn = dbmod.connect(db_path)
     dbmod.migrate(conn)
+    # Fresh process → empty job queue, so any 'pending' job is an orphan from a
+    # prior run whose worker died. Reset them so the UI doesn't poll forever.
+    repo.interrupt_stale_jobs(conn)
     conn.close()
     # Store path — routes create per-request connections (SQLite conn is not thread-safe)
     app.state.db_path = db_path

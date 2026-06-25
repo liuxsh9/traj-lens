@@ -198,6 +198,11 @@ function jobErrCount(j: JobInfo): number {
 // failure; it's actually "86 already annotated, 0 new".
 function jobLabel(j: JobInfo): { text: string; color: string } {
   if (j.status === "error") return { text: "failed", color: "var(--bad)" };
+  if (j.status === "interrupted") {
+    // server restarted mid-run; re-running is cheap (cache-aware) and resumes
+    const prog = j.total ? ` at ${j.done ?? 0}/${j.total}` : "";
+    return { text: `interrupted${prog} · re-run to resume`, color: "var(--warn)" };
+  }
   if (j.status === "pending") {
     const prog = j.total ? ` ${j.done ?? 0}/${j.total}` : "";
     return { text: `running…${prog}`, color: "var(--warn)" };

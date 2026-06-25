@@ -38,6 +38,17 @@ def test_jobs_scoped_to_dataset(tmp_path):
     assert repo.list_jobs(conn, dataset_id="nope") == []
 
 
+def test_interrupt_stale_jobs(tmp_path):
+    conn = dbmod.connect(str(tmp_path / "t.db")); dbmod.migrate(conn)
+    repo.create_job(conn, job_id="p", annotator_id="a", dataset_id="ds")
+    repo.create_job(conn, job_id="d", annotator_id="a", dataset_id="ds")
+    repo.update_job(conn, "d", status="done")
+    assert repo.interrupt_stale_jobs(conn) == 1  # only the pending one
+    assert repo.get_job(conn, "p")["status"] == "interrupted"
+    assert repo.get_job(conn, "d")["status"] == "done"  # finished job untouched
+    assert repo.interrupt_stale_jobs(conn) == 0  # idempotent: nothing left pending
+
+
 def test_wal_enabled(tmp_path):
     conn = dbmod.connect(str(tmp_path / "t.db"))
     mode = conn.execute("PRAGMA journal_mode").fetchone()[0]

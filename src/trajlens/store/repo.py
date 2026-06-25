@@ -377,6 +377,18 @@ def list_jobs(conn, *, dataset_id: str, limit: int = 50) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def interrupt_stale_jobs(conn) -> int:
+    """Mark every still-'pending' job as 'interrupted'. Called at serve startup:
+    the in-memory job queue is empty on a fresh process, so any pending row is an
+    orphan from a previous run whose worker died. Without this the UI polls those
+    rows forever, showing a phantom 'running…'. Returns the number reset."""
+    n = conn.execute(
+        "UPDATE jobs SET status='interrupted', updated_at=? WHERE status='pending'",
+        (_now(),)).rowcount
+    conn.commit()
+    return n
+
+
 def update_job(conn, job_id: str, **kwargs) -> None:
     sets = ", ".join(f"{k}=?" for k in kwargs)
     vals = list(kwargs.values())
