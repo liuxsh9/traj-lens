@@ -102,19 +102,32 @@ incident, now prevented by those headers.
 - **Push after committing** unless explicitly told otherwise.
 - Generated artifacts (`e2e_blobs/`, `__pycache__/`, `*.db`) stay in `.gitignore`, never committed.
 
-### Multiple agents editing at once
+### Multiple agents editing at once (standard workflow)
 
-This repo is often edited by several AI agents in parallel. The working tree may
-hold another agent's unstaged, half-finished work.
+This repo is often edited by several AI agents in parallel. **One service rule:
+exactly one server runs — `make serve` on :8000 in the main checkout. Agents
+never `serve`.** This keeps a single live UI and avoids port / `trajlens.db`
+collisions. Two roles:
 
-- **Stage only your own hunks** — `git add -p` (or explicit paths/lines). NEVER
-  `git add <whole-file>` or `git add -A`; it sweeps in others' in-flight changes
-  and ships partial features. (Incident: a whole-file add pushed a `routes.py`
-  calling `jobqueue.submit_cpu` before that function was committed.)
-- **Verify in a CLEAN checkout before push**, not in the working tree — a dirty
-  tree supplies missing committed deps, giving a false "import OK".
-  `git worktree add /tmp/verify origin/main && (cd /tmp/verify && make test)`.
-- **Isolate parallel work in a worktree per agent**, not just a branch — branches
-  share the same files on disk; only a worktree gives each agent its own files.
-- Don't run a server per worktree (collides on :8000 and `trajlens.db`); keep one
-  shared stack for QA and merge/test branches serially.
+**Agent in a worktree (does the coding):**
+1. `make worktree NAME=<task>` — creates `../tl-<task>` on branch `feat/<task>`,
+   isolated files of your own. (A branch alone does NOT isolate — all branches
+   share the main checkout's files; only a worktree gives you separate files.)
+2. Edit there. Verify with `make test` / `make typecheck`. **Never `make serve`**
+   — there is only one shared server; you don't need a port to write code.
+3. Commit with `git add -p` — stage ONLY your own hunks. NEVER `git add <whole-file>`
+   or `git add -A`: in a shared tree that sweeps in another agent's in-flight work
+   and ships partial features. (Incident 2026-06-24: a whole-file add pushed a
+   `routes.py` calling `jobqueue.submit_cpu` before that function was committed.)
+4. Push your branch. Do NOT merge to main yourself.
+
+**Integrator on the main checkout (merges + QA, serially):**
+1. `make integrate BR=feat/<task>` — merges the branch and runs the suite.
+2. Restart `make serve` (or `make smoke`) to eyeball the one live UI on :8000.
+3. Push main. Then take the next branch — one at a time, never parallel merges.
+4. Before pushing anything risky, sanity-check in a clean tree, not the dirty
+   working tree (a dirty tree masks missing committed deps → false "import OK"):
+   `git worktree add /tmp/verify origin/main && (cd /tmp/verify && make test)`.
+
+When in doubt with only 2–3 small changes, skip parallelism — edit serially in
+the main checkout, one commit+push at a time. It's often faster than coordinating.
