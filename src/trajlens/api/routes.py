@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import shutil
@@ -173,7 +174,8 @@ def scan_dataset(dataset_id: str, request: Request,
         finally:
             bg.close()
 
-    queued_behind = jobqueue.submit(_run)
+    # semgrep is CPU-bound (saturates cores via its own pool) → CPU lane.
+    queued_behind = jobqueue.submit_cpu(_run)
     return {"job_id": job_id, "annotator_id": "semgrep", "status": "pending",
             "queued_behind": queued_behind}
 
@@ -210,10 +212,16 @@ def create_job(request: Request, body: dict = Body(...),
 
     def _run(loop):
         bg_conn = dbmod.connect(db_path)
+        coro = lambda: run_annotator(
+            bg_conn, spec, mod, llm_profiles=profiles,
+            content_hashes=content_hashes, job_id=job_id)
         try:
-            loop.run_until_complete(run_annotator(
-                bg_conn, spec, mod, llm_profiles=profiles,
-                content_hashes=content_hashes, job_id=job_id))
+            # LLM lane hands us its persistent loop (keeps the rate limiter's
+            # semaphore bound to one loop); CPU lane passes None → fresh loop.
+            if loop is not None:
+                loop.run_until_complete(coro())
+            else:
+                asyncio.run(coro())
         except Exception as exc:  # noqa: BLE001
             # otherwise the job row stays 'pending' forever and the UI polls
             # it indefinitely (e.g. missing LLM profile raises mid-run).
@@ -222,7 +230,10 @@ def create_job(request: Request, body: dict = Body(...),
         finally:
             bg_conn.close()
 
-    queued_behind = jobqueue.submit(_run)
+    # LLM annotators serialize on the rate-limited LLM lane; rule annotators
+    # (pure-Python CPU) go to the CPU lane so they don't wait behind a long run.
+    submit = jobqueue.submit_llm if spec.type == "llm" else jobqueue.submit_cpu
+    queued_behind = submit(_run)
     return {"job_id": job_id, "annotator_id": spec.id, "status": "pending",
             "queued_behind": queued_behind}
 
@@ -269,7 +280,9 @@ def list_annotators(conn: sqlite3.Connection = Depends(_conn)):
     with the currently-active registered version (if any) so the UI can flag
     stale annotations (run by an older version)."""
     import pathlib, yaml  # noqa: E401
-    configs_dir = pathlib.Path("config/annotators")
+    # Anchor to repo root (src/trajlens/api/routes.py -> parents[3]), not cwd, so
+    # `trajlens serve` finds annotators regardless of where it's launched.
+    configs_dir = pathlib.Path(__file__).resolve().parents[3] / "config" / "annotators"
     if not configs_dir.is_dir():
         return []
     active = {r["id"]: r["version"] for r in conn.execute(

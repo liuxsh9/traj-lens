@@ -233,6 +233,7 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
   // below resumes from these job_ids and catches up jobs that finished while away.
   const [activeJobs, setActiveJobs] = useSticky<JobInfo[]>(`jobs:${datasetId}`, []);
   const [running, setRunning] = useState(false);
+  const [scanNotice, setScanNotice] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<
     { status: "pending" | "done" | "error"; computed?: number } | null
   >(null);
@@ -320,10 +321,17 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
   };
 
   const runScan = async () => {
+    setScanNotice(null);
     try {
       const job = await scanDataset(datasetId);
       setActiveJobs((prev) => [...prev.filter((j) => j.annotator_id !== "semgrep"), job]);
-    } catch { /* semgrep not installed */ }
+    } catch (e) {
+      // Backend returns 400 when the semgrep CLI isn't installed; anything else
+      // is an unexpected failure. Either way, tell the user instead of no-op.
+      setScanNotice(String(e).includes("400")
+        ? "semgrep 未安装，无法扫描安全问题。请在部署环境中安装 semgrep 后重试。"
+        : "安全扫描启动失败，请稍后重试。");
+    }
   };
 
   const runOne = async (a: AnnotatorInfo) => {
@@ -361,6 +369,11 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
           </button>
         ))}
       </div>
+      {scanNotice && (
+        <div className="dim" style={{ marginTop: 6, fontSize: 11, color: "var(--warn)" }}>
+          {scanNotice}
+        </div>
+      )}
       {(activeJobs.length > 0 || metrics) && (
         <>
           {activeJobs.some((j) => j.status === "pending") && (() => {
