@@ -65,6 +65,27 @@ SELECT source_path, batch_id FROM ingestions WHERE content_hash = ?;
 
 Score formula (`success_score`): `{resolved:100, partially_resolved:50, unresolved:0}[resolution] - min(pushback_count * 5, base * 0.5)`. Logic in `metrics/builtins.py`.
 
+## Frontend build is NOT automatic — rebuild `web/dist` whenever frontend source changes
+
+`web/dist` is a gitignored Vite build artifact. `trajlens serve` only *statically
+serves* it — it never compiles. Pulling/pushing source does **not** touch `web/dist`.
+So if the served bundle is older than `web/src`, the browser runs stale JS against a
+newer API and you get silent breakage (e.g. an "undefined imported" upload toast when
+the response shape changed under an old bundle). A real production incident: prod was
+fixed by `npm run build` alone, without pulling any new source — the source was already
+current, only the bundle was stale.
+
+**Rule — after ANY of these, run `cd web && npm run build` before the app is "done":**
+- you edited anything under `web/src/`
+- you pushed frontend changes (rebuild on the box that serves, or in CI/deploy)
+- you (or a user) `git pull`ed and will run `trajlens serve`
+
+Verify the served bundle matches source — `curl -s http://HOST/ | grep -o 'assets/[^"]*\.js'`
+should point at a freshly built hash. `index.html` is served `no-cache` and assets
+`immutable` (see `api/app.py`), so once the bundle is rebuilt every browser picks it up
+on next load — no hard-refresh needed. Stale browsers were the second half of the same
+incident, now prevented by those headers.
+
 ## Git workflow
 
 - **All changes must be committed** — never leave meaningful work as unstaged modifications across sessions.
