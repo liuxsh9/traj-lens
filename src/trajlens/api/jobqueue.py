@@ -1,17 +1,21 @@
-"""Single-worker background job queue.
+"""Background job queue — two independent lanes, each a single worker thread.
 
-All annotator + semgrep jobs run serially on ONE worker thread that owns ONE
-persistent event loop for the process lifetime. Two consequences we rely on:
+Why two lanes instead of one shared queue: a 2-second rule job should not wait
+behind a 5-minute LLM job. Splitting by resource decouples their latency.
 
-1. Serial execution — only one job runs at a time, so concurrent LLM annotators
-   no longer multiply the real request rate against the provider. The LLM rate
-   limiter (llm_client) is finally a true global ceiling instead of per-job.
-2. Persistent loop — the limiter's asyncio.Semaphore binds to this loop once and
-   stays bound, so it's shared across every job (the old per-job asyncio.run gave
-   each job a fresh loop and thus its own semaphore).
+  LLM lane — one worker owning one persistent event loop. Serial by design: the
+    llm_client rate limiter's asyncio.Semaphore binds to this loop once and stays
+    a true global ceiling. Running LLM jobs concurrently would give each its own
+    loop+semaphore and multiply the real request rate against the provider.
 
-ponytail: FIFO, no priorities. Rule annotators are fast; if one lands behind an
-LLM job it just waits. Add a PriorityQueue only if rule-first ordering matters.
+  CPU lane — rule annotators + semgrep scans. Also serial, but for a different
+    reason: rule annotators are pure-Python CPU work that holds the GIL, so
+    running them in parallel buys no throughput, only SQLite write contention.
+    semgrep already saturates cores via its own ThreadPoolExecutor internally.
+
+ponytail: if a rule annotator ever releases the GIL (C extension, subprocess),
+swap the CPU lane's single worker for a small ThreadPoolExecutor — the lane
+boundary already isolates that change from the LLM path.
 """
 import asyncio
 import logging
@@ -21,38 +25,60 @@ from typing import Callable
 
 log = logging.getLogger(__name__)
 
-# Each task is `fn(loop)` where loop is the worker's persistent event loop.
-# Sync jobs (semgrep) ignore it; async jobs use loop.run_until_complete(...).
-_queue: "queue.Queue[Callable]" = queue.Queue()
-_worker: threading.Thread | None = None
-_lock = threading.Lock()
+
+class _Lane:
+    """One FIFO queue drained by one daemon worker thread. `needs_loop` gives the
+    worker a persistent event loop to pass into each task (LLM lane); the CPU lane
+    passes None."""
+
+    def __init__(self, name: str, needs_loop: bool):
+        self._name = name
+        self._needs_loop = needs_loop
+        self._queue: "queue.Queue[Callable]" = queue.Queue()
+        self._worker: threading.Thread | None = None
+        self._lock = threading.Lock()
+
+    def _run_worker(self) -> None:
+        loop = None
+        if self._needs_loop:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        while True:
+            fn = self._queue.get()
+            try:
+                fn(loop)
+            except Exception:  # noqa: BLE001 — one bad job must not kill the lane
+                log.exception("%s lane: job failed", self._name)
+            finally:
+                self._queue.task_done()
+
+    def _ensure_worker(self) -> None:
+        with self._lock:
+            if self._worker is None or not self._worker.is_alive():
+                self._worker = threading.Thread(
+                    target=self._run_worker, daemon=True, name=f"{self._name}-worker")
+                self._worker.start()
+
+    def submit(self, fn: Callable) -> int:
+        """Enqueue `fn(loop)`. Returns queue depth at enqueue time (0 = starts now,
+        N = N jobs ahead of it in THIS lane)."""
+        self._ensure_worker()
+        depth = self._queue.qsize()
+        self._queue.put(fn)
+        return depth
 
 
-def _run_worker() -> None:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    while True:
-        fn = _queue.get()
-        try:
-            fn(loop)
-        except Exception:  # noqa: BLE001 — a single bad job must not kill the worker
-            log.exception("background job failed")
-        finally:
-            _queue.task_done()
+_llm_lane = _Lane("llm", needs_loop=True)
+_cpu_lane = _Lane("cpu", needs_loop=False)
 
 
-def _ensure_worker() -> None:
-    global _worker
-    with _lock:
-        if _worker is None or not _worker.is_alive():
-            _worker = threading.Thread(target=_run_worker, daemon=True, name="job-worker")
-            _worker.start()
+def submit_llm(fn: Callable) -> int:
+    """Enqueue an async LLM job onto the serial LLM lane. `fn(loop)` should run its
+    coroutine via loop.run_until_complete(...)."""
+    return _llm_lane.submit(fn)
 
 
-def submit(fn: Callable) -> int:
-    """Enqueue `fn(loop)` to run on the single worker thread. Returns queue depth
-    at enqueue time (0 = will start immediately, N = N jobs ahead of it)."""
-    _ensure_worker()
-    depth = _queue.qsize()
-    _queue.put(fn)
-    return depth
+def submit_cpu(fn: Callable) -> int:
+    """Enqueue a CPU-bound job (rule annotator, semgrep) onto the CPU lane.
+    `fn(loop)` receives loop=None."""
+    return _cpu_lane.submit(fn)
