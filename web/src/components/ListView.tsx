@@ -30,6 +30,16 @@ const sortFieldMap: Record<string, string> = {
   pb: "pushback_count", score: "score", sec: "security_findings", created_at: "created_at",
 };
 
+const defaultSorting: SortingState = [{ id: "score", desc: true }];
+
+export function getListSortParams(sorting: SortingState) {
+  const activeSort = sorting[0] ?? defaultSorting[0];
+  return {
+    sortBy: sortFieldMap[activeSort.id] ?? "created_at",
+    sortDir: activeSort.desc === false ? "asc" : "desc",
+  };
+}
+
 const columns = [
   col.accessor((r) => r.annotations?.title ?? "", {
     id: "title",
@@ -118,12 +128,12 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
   const k = `list:${datasetId ?? "_all"}`;
   const [page, setPage] = useSticky(`${k}:page`, 0);
   const [pageSize, setPageSize] = useSticky<number>(`${k}:size`, 50);
-  const [sorting, setSorting] = useSticky<SortingState>(`${k}:sort`, []);
+  const [sorting, setSorting] = useSticky<SortingState>(`${k}:sort`, defaultSorting);
   const [filterRules, setFilterRules] = useSticky<FilterRule[]>(`${k}:filters`, []);
 
   // derive server params from UI state
-  const sortBy = sorting[0]?.id ? (sortFieldMap[sorting[0].id] ?? "created_at") : "created_at";
-  const sortDir = sorting[0]?.desc === false ? "asc" : "desc";
+  const effectiveSorting = sorting.length > 0 ? sorting : defaultSorting;
+  const { sortBy, sortDir } = getListSortParams(effectiveSorting);
   const apiFilters = useMemo(
     () => filterRules.map((r) => ({ field: r.field, op: r.op, value: r.value })),
     [filterRules],
@@ -155,14 +165,14 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
 
   // reset to page 0 when sort changes
   const handleSortChange = useCallback((updater: SortingState | ((old: SortingState) => SortingState)) => {
-    setSorting(updater);
+    setSorting(typeof updater === "function" ? updater(effectiveSorting) : updater);
     setPage(0);
-  }, []);
+  }, [effectiveSorting, setPage, setSorting]);
 
   const table = useReactTable({
     data: items,
     columns,
-    state: { sorting },
+    state: { sorting: effectiveSorting },
     onSortingChange: handleSortChange,
     getCoreRowModel: getCoreRowModel(),
     manualSorting: true,
