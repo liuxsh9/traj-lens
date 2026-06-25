@@ -101,3 +101,20 @@ incident, now prevented by those headers.
 - **Commit order matters** — if commit B depends on commit A (e.g. migration before the code that uses it), commit A first.
 - **Push after committing** unless explicitly told otherwise.
 - Generated artifacts (`e2e_blobs/`, `__pycache__/`, `*.db`) stay in `.gitignore`, never committed.
+
+### Multiple agents editing at once
+
+This repo is often edited by several AI agents in parallel. The working tree may
+hold another agent's unstaged, half-finished work.
+
+- **Stage only your own hunks** — `git add -p` (or explicit paths/lines). NEVER
+  `git add <whole-file>` or `git add -A`; it sweeps in others' in-flight changes
+  and ships partial features. (Incident: a whole-file add pushed a `routes.py`
+  calling `jobqueue.submit_cpu` before that function was committed.)
+- **Verify in a CLEAN checkout before push**, not in the working tree — a dirty
+  tree supplies missing committed deps, giving a false "import OK".
+  `git worktree add /tmp/verify origin/main && (cd /tmp/verify && make test)`.
+- **Isolate parallel work in a worktree per agent**, not just a branch — branches
+  share the same files on disk; only a worktree gives each agent its own files.
+- Don't run a server per worktree (collides on :8000 and `trajlens.db`); keep one
+  shared stack for QA and merge/test branches serially.
