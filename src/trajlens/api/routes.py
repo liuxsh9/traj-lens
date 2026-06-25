@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Generator
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile
+from starlette.responses import FileResponse
 
 from trajlens.adapters import detect_and_parse
 from trajlens.store import db as dbmod, repo
@@ -497,18 +498,42 @@ def create_export(request: Request, body: dict = Body(...),
         JOIN batches b ON i.batch_id = b.id AND b.dataset_id = ?
     """, (dataset_id,)).fetchall()]
 
+    # Create the artifact first so its id names the file — unique per export, so
+    # concurrent exports never clobber each other (old code wrote a fixed
+    # "export.jsonl"). UI omits "output"; CLI may still pass an explicit path.
+    artifact = repo.create_export_artifact(
+        conn, dataset_id=dataset_id, exporter=fmt, traj_count=0)
+    out_path = body.get("output") or os.path.join(
+        os.path.dirname(blob_dir) or ".", "exports", f"{artifact['id']}.jsonl")
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+
     count = 0
-    with open(output, "w") as f:
+    with open(out_path, "w") as f:
         for ch in hashes:
             record = exporter_fn(conn, ch, blob_dir=blob_dir)
             if record:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
                 count += 1
 
-    artifact = repo.create_export_artifact(
-        conn, dataset_id=dataset_id, exporter=fmt,
-        traj_count=count, output_path=output)
-    return artifact
+    repo.finalize_export_artifact(conn, artifact["id"], traj_count=count, output_path=out_path)
+    return {**artifact, "traj_count": count, "output_path": out_path}
+
+
+@router.get("/api/v1/datasets/{dataset_id}/exports")
+def list_exports(dataset_id: str, conn: sqlite3.Connection = Depends(_conn)):
+    return repo.list_export_artifacts(conn, dataset_id)
+
+
+@router.get("/api/v1/exports/{export_id}/download")
+def download_export(export_id: str, conn: sqlite3.Connection = Depends(_conn)):
+    art = conn.execute(
+        "SELECT exporter, output_path FROM export_artifacts WHERE id=?", (export_id,)).fetchone()
+    if art is None or not art["output_path"]:
+        raise HTTPException(status_code=404, detail="export not found")
+    if not os.path.exists(art["output_path"]):
+        raise HTTPException(status_code=410, detail="export file gone — re-export")
+    return FileResponse(art["output_path"], media_type="application/x-ndjson",
+                        filename=f"{export_id}-{art['exporter']}.jsonl")
 
 
 @router.get("/api/v1/datasets/{dataset_id}/trajectories")

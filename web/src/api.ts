@@ -156,6 +156,36 @@ export async function listBatches(datasetId: string): Promise<Batch[]> {
   return r.json();
 }
 
+export interface ExportArtifact {
+  id: string;
+  dataset_id: string;
+  exporter: string;
+  traj_count: number;
+  output_path: string;
+  created_at: string;
+}
+
+export async function createExport(datasetId: string, format: string): Promise<ExportArtifact> {
+  const r = await fetch("/api/v1/exports", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dataset_id: datasetId, format }),
+  });
+  if (!r.ok) throw new Error(`export failed: ${r.status}`);
+  return r.json();
+}
+
+export async function listExports(datasetId: string): Promise<ExportArtifact[]> {
+  const r = await fetch(`/api/v1/datasets/${datasetId}/exports`);
+  if (!r.ok) throw new Error(`list exports failed: ${r.status}`);
+  return r.json();
+}
+
+// ponytail: GET endpoint sets Content-Disposition; let the browser download it.
+export function downloadExportUrl(exportId: string): string {
+  return `/api/v1/exports/${exportId}/download`;
+}
+
 export interface DatasetStats {
   total: number;
   metrics: Record<string, { min: number; max: number; avg: number; count: number }>;

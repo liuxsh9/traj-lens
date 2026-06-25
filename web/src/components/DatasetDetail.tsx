@@ -3,8 +3,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   listBatches, getDatasetStats, listAnnotators, uploadToDataset,
   createJob, getJob, listDatasetJobs, computeMetrics, scanDataset,
-  listDatasets,
+  listDatasets, createExport, listExports, downloadExportUrl,
   type Batch, type DatasetStats, type AnnotatorInfo, type JobInfo,
+  type ExportArtifact,
 } from "../api";
 import { ListView } from "./ListView";
 import { useSticky } from "../useSticky";
@@ -430,6 +431,65 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
   );
 }
 
+/* ── Export panel ─────────────────────────────────────────────────── */
+
+const EXPORT_FORMATS = ["panguml2"];  // ponytail: add formats as exporters register
+
+function ExportPanel({ datasetId }: { datasetId: string }) {
+  const qc = useQueryClient();
+  const [format, setFormat] = useState(EXPORT_FORMATS[0]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const { data: exports = [] } = useQuery({
+    queryKey: ["exports", datasetId],
+    queryFn: () => listExports(datasetId),
+  });
+
+  const run = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const art = await createExport(datasetId, format);
+      qc.invalidateQueries({ queryKey: ["exports", datasetId] });
+      // Auto-download the freshly built file.
+      window.open(downloadExportUrl(art.id), "_blank");
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="annotate-panel">
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button className="btn btn-sm" onClick={run} disabled={busy}>
+          {busy ? "Exporting…" : "Export"}
+        </button>
+        <select className="btn btn-sm btn-ghost" value={format}
+          onChange={(e) => setFormat(e.target.value)} disabled={busy}>
+          {EXPORT_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        {err && <span className="dim" style={{ fontSize: 11, color: "var(--bad)" }}>{err}</span>}
+      </div>
+      {exports.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+          {exports.map((x: ExportArtifact) => (
+            <div key={x.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+              <span className="chip chip-sm">{x.exporter}</span>
+              <span className="dim">{x.traj_count} traj</span>
+              <span className="dim">{x.created_at?.slice(0, 19).replace("T", " ")}</span>
+              <a className="btn btn-sm btn-ghost" href={downloadExportUrl(x.id)} target="_blank" rel="noreferrer">
+                ↓ download
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Main component ──────────────────────────────────────────────── */
 
 export function DatasetDetail({ datasetId, datasetName, onBack, onDatasetChange, onOpen }: Props) {
@@ -480,6 +540,8 @@ export function DatasetDetail({ datasetId, datasetName, onBack, onDatasetChange,
       <UploadZone datasetId={datasetId} onDone={refreshAll} />
 
       <AnnotatePanel datasetId={datasetId} />
+
+      <ExportPanel datasetId={datasetId} />
 
       {batches.length > 0 && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>

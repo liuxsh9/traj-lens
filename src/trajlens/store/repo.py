@@ -201,6 +201,13 @@ def create_export_artifact(conn, *, dataset_id: str, exporter: str,
             "traj_count": traj_count, "output_path": output_path}
 
 
+def finalize_export_artifact(conn, export_id: str, *, traj_count: int, output_path: str) -> None:
+    conn.execute(
+        "UPDATE export_artifacts SET traj_count=?, output_path=? WHERE id=?",
+        (traj_count, output_path, export_id))
+    conn.commit()
+
+
 def list_export_artifacts(conn, dataset_id: str) -> list[dict]:
     rows = conn.execute(
         "SELECT * FROM export_artifacts WHERE dataset_id=? ORDER BY created_at DESC",

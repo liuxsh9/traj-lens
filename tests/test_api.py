@@ -43,6 +43,33 @@ def test_upload_done_survives_metric_failure(tmp_path, monkeypatch):
     assert c.get(f"/api/v1/datasets/{ds['id']}/trajectories").json()["total"] == 1
 
 
+def test_export_then_download(tmp_path):
+    """POST /exports writes a unique file + records an artifact; GET .../download
+    streams it back. Two exports must not clobber each other."""
+    c = _client(tmp_path)
+    ds = c.post("/api/v1/datasets", json={"name": "exp"}).json()
+    obj = json.loads((FIXTURES / "panguml2_weather.json").read_text())
+    c.post(f"/api/v1/datasets/{ds['id']}/upload",
+           files={"file": ("u.jsonl", (json.dumps(obj) + "\n").encode(), "application/x-ndjson")})
+
+    a1 = c.post("/api/v1/exports", json={"dataset_id": ds["id"], "format": "panguml2"}).json()
+    a2 = c.post("/api/v1/exports", json={"dataset_id": ds["id"], "format": "panguml2"}).json()
+    assert a1["id"] != a2["id"]
+    assert a1["output_path"] != a2["output_path"]   # unique → no clobber
+    assert a1["traj_count"] == 1
+
+    listed = c.get(f"/api/v1/datasets/{ds['id']}/exports").json()
+    assert {a1["id"], a2["id"]} <= {x["id"] for x in listed}
+
+    dl = c.get(f"/api/v1/exports/{a1['id']}/download")
+    assert dl.status_code == 200
+    lines = [l for l in dl.text.splitlines() if l.strip()]
+    assert len(lines) == 1
+    assert json.loads(lines[0])["meta_info"]["traj_lens_content_hash"]
+
+    assert c.get("/api/v1/exports/nope/download").status_code == 404
+
+
 def test_spa_cache_headers(tmp_path):
     """index.html must revalidate (no-cache) so a rebuild never strands the
     browser on a stale bundle; fingerprinted assets cache forever."""
