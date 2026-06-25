@@ -5,11 +5,13 @@ Coding-agent trajectory analysis platform. Ingest raw logs from multiple agent f
 ## Quick commands
 
 ```bash
+make help                           # list all dev/ops tasks (install, test, build, deploy…)
 uv run pytest tests/ -x -q          # run tests (need uv, python 3.12)
 uv run trajlens ingest <file>       # ingest JSON/JSONL
 uv run trajlens serve               # API on :8000; auto-builds stale web/dist, then serves it
 cd web && npm run build              # build frontend (Vite+React+TS)
 cd web && npm run dev                # dev server on :5173, proxies /api→:8000
+make deploy                         # server-side upgrade: pull, sync, rebuild web, restart
 ```
 
 ## Architecture

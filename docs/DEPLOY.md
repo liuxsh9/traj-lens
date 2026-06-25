@@ -134,6 +134,17 @@ tar czf /backup/blobs-$(date +%F).tgz blobs/
 
 ## 5. 升级
 
+一条命令(`scripts/deploy.sh`,幂等):备份 DB → `git pull` → `uv sync` → **重建前端** → 重启 systemd 服务。
+
+```bash
+make deploy          # 等价于 ./scripts/deploy.sh
+./scripts/deploy.sh --no-pull   # 已手动同步源码时跳过 git pull
+```
+
+> 脚本**强制重建 `web/dist`**——这是手动升级最容易漏的一步,漏了就会用旧前端跑新接口(见 CLAUDE.md「Frontend build is NOT automatic」)。非 systemd 托管时,脚本会提示你自行重启 `serve` 进程。
+
+手动等价步骤:
+
 ```bash
 git pull
 uv sync                          # 同步 Python 依赖
@@ -141,7 +152,7 @@ cd web && npm install && npm run build && cd ..   # 重建前端
 sudo systemctl restart trajlens
 ```
 
-DB schema 迁移在 `serve` 启动时自动执行（`app.py` 的 `dbmod.migrate`）——升级前备份 DB（§4）。
+DB schema 迁移在 `serve` 启动时自动执行(`app.py` 的 `dbmod.migrate`)——升级前备份 DB(§4),`deploy.sh` 已自动备份。
 
 ## 6. 冒烟验证
 
