@@ -132,6 +132,19 @@ export async function createDataset(name: string, description = ""): Promise<Dat
   return r.json();
 }
 
+export async function updateDataset(
+  id: string,
+  fields: { name?: string; description?: string },
+): Promise<Dataset> {
+  const r = await fetch(`/api/v1/datasets/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fields),
+  });
+  if (!r.ok) throw new Error(`update dataset failed: ${r.status}`);
+  return r.json();
+}
+
 export async function deleteDataset(id: string): Promise<void> {
   const r = await fetch(`/api/v1/datasets/${id}`, { method: "DELETE" });
   if (!r.ok) throw new Error(`delete dataset failed: ${r.status}`);

@@ -116,6 +116,28 @@ def test_get_or_create_dataset_idempotent(tmp_path):
     assert d1["id"] == d2["id"]
 
 
+def test_update_dataset_metadata_preserves_id(tmp_path):
+    conn = dbmod.connect(str(tmp_path / "t.db")); dbmod.migrate(conn)
+    ds = repo.create_dataset(conn, name="Original", description="old")
+
+    updated = repo.update_dataset(conn, ds["id"], name="Renamed", description="new note")
+
+    assert updated["id"] == ds["id"]
+    assert updated["name"] == "Renamed"
+    assert updated["description"] == "new note"
+    assert repo.get_dataset(conn, ds["id"])["name"] == "Renamed"
+
+
+def test_get_or_create_default_dataset_uses_stable_id_after_rename(tmp_path):
+    conn = dbmod.connect(str(tmp_path / "t.db")); dbmod.migrate(conn)
+    repo.update_dataset(conn, "_default", name="Inbox", description="renamed")
+
+    ds = repo.get_or_create_dataset(conn, name="_default")
+
+    assert ds["id"] == "_default"
+    assert ds["name"] == "Inbox"
+
+
 def test_delete_dataset_refuses_default(tmp_path):
     conn = dbmod.connect(str(tmp_path / "t.db")); dbmod.migrate(conn)
     assert repo.delete_dataset(conn, "_default") is False

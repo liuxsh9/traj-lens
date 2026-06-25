@@ -29,6 +29,7 @@ export function App() {
         datasetId={view.id}
         datasetName={view.name}
         onBack={() => setView({ page: "datasets" })}
+        onDatasetChange={(name) => setView({ page: "dataset", id: view.id, name })}
         onOpen={(hash) =>
           setView({ page: "trajectory", hash, datasetId: view.id, datasetName: view.name })
         }

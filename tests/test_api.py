@@ -68,6 +68,40 @@ def test_health(tmp_path):
     assert c.get("/api/health").json() == {"status": "ok"}
 
 
+def test_update_dataset_display_metadata_preserves_id(tmp_path):
+    c = _client(tmp_path)
+    ds = c.post("/api/v1/datasets", json={"name": "Original", "description": "old"}).json()
+
+    r = c.patch(f"/api/v1/datasets/{ds['id']}",
+                json={"name": "Renamed", "description": "new note"})
+
+    assert r.status_code == 200
+    updated = r.json()
+    assert updated["id"] == ds["id"]
+    assert updated["name"] == "Renamed"
+    assert updated["description"] == "new note"
+    got = c.get(f"/api/v1/datasets/{ds['id']}").json()
+    assert got["name"] == "Renamed"
+    assert got["description"] == "new note"
+
+
+def test_update_dataset_rejects_empty_name(tmp_path):
+    c = _client(tmp_path)
+    ds = c.post("/api/v1/datasets", json={"name": "Original"}).json()
+
+    r = c.patch(f"/api/v1/datasets/{ds['id']}", json={"name": "   "})
+
+    assert r.status_code == 422
+
+
+def test_update_missing_dataset_404(tmp_path):
+    c = _client(tmp_path)
+
+    r = c.patch("/api/v1/datasets/missing", json={"name": "Renamed"})
+
+    assert r.status_code == 404
+
+
 def test_ingest_then_get(tmp_path):
     c = _client(tmp_path)
     raw = json.loads((FIXTURES / "panguml2_weather.json").read_text())

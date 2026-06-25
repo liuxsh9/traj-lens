@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { listDatasets, createDataset, deleteDataset, type Dataset } from "../api";
+import { listDatasets, createDataset, updateDataset, deleteDataset, type Dataset } from "../api";
 
 export function DatasetWall({ onOpen }: { onOpen: (id: string, name: string) => void }) {
   const qc = useQueryClient();
@@ -12,6 +12,7 @@ export function DatasetWall({ onOpen }: { onOpen: (id: string, name: string) => 
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  const [editing, setEditing] = useState<{ id: string; name: string; description: string } | null>(null);
 
   const createMut = useMutation({
     mutationFn: () => createDataset(newName.trim(), newDesc.trim()),
@@ -21,6 +22,20 @@ export function DatasetWall({ onOpen }: { onOpen: (id: string, name: string) => 
       setNewName("");
       setNewDesc("");
       onOpen(ds.id, ds.name);
+    },
+  });
+
+  const updateMut = useMutation({
+    mutationFn: () => {
+      if (!editing) throw new Error("no dataset selected");
+      return updateDataset(editing.id, {
+        name: editing.name.trim(),
+        description: editing.description.trim(),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["datasets"] });
+      setEditing(null);
     },
   });
 
@@ -88,37 +103,88 @@ export function DatasetWall({ onOpen }: { onOpen: (id: string, name: string) => 
         <div className="dim">No datasets yet. Create one to get started.</div>
       ) : (
         <div className="ds-grid">
-          {datasets.map((ds: Dataset) => (
-            <div
-              key={ds.id}
-              className="ds-card"
-              onClick={() => onOpen(ds.id, ds.name)}
-            >
-              <div className="ds-card-header">
-                <span className="ds-card-name" title={ds.name}>{ds.name}</span>
-                {ds.id !== "_default" && (
-                  <button
-                    className="btn-icon"
-                    title="Delete"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm(`Delete "${ds.name}"?`)) deleteMut.mutate(ds.id);
-                    }}
-                  >
-                    ×
-                  </button>
+          {datasets.map((ds: Dataset) => {
+            const isEditing = editing?.id === ds.id;
+            return (
+              <div
+                key={ds.id}
+                className="ds-card"
+                onClick={() => !isEditing && onOpen(ds.id, ds.name)}
+              >
+                {isEditing ? (
+                  <div className="ds-edit" onClick={(e) => e.stopPropagation()}>
+                    <label className="dim" style={{ fontSize: 12 }}>Name</label>
+                    <input
+                      className="input"
+                      value={editing.name}
+                      onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                      autoFocus
+                      onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && editing.name.trim() && updateMut.mutate()}
+                    />
+                    <label className="dim" style={{ fontSize: 12 }}>Description</label>
+                    <input
+                      className="input"
+                      value={editing.description}
+                      onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                      placeholder="optional"
+                    />
+                    <div className="ds-edit-actions">
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => updateMut.mutate()}
+                        disabled={!editing.name.trim() || updateMut.isPending}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => setEditing(null)}
+                        disabled={updateMut.isPending}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="ds-card-header">
+                      <span className="ds-card-name" title={ds.name}>{ds.name}</span>
+                      <button
+                        className="btn-icon"
+                        title="Edit"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditing({ id: ds.id, name: ds.name, description: ds.description || "" });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      {ds.id !== "_default" && (
+                        <button
+                          className="btn-icon btn-icon-danger"
+                          title="Delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Delete "${ds.name}"?`)) deleteMut.mutate(ds.id);
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                    {ds.description && <div className="dim ds-card-desc">{ds.description}</div>}
+                    <div className="ds-card-stats">
+                      <span>{ds.traj_count} trajectories</span>
+                      <span className="dim">{ds.batch_count} batches</span>
+                    </div>
+                    <div className="dim" style={{ fontSize: 11 }}>
+                      {ds.created_at?.slice(0, 16).replace("T", " ")}
+                    </div>
+                  </>
                 )}
               </div>
-              {ds.description && <div className="dim ds-card-desc">{ds.description}</div>}
-              <div className="ds-card-stats">
-                <span>{ds.traj_count} trajectories</span>
-                <span className="dim">{ds.batch_count} batches</span>
-              </div>
-              <div className="dim" style={{ fontSize: 11 }}>
-                {ds.created_at?.slice(0, 16).replace("T", " ")}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

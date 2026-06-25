@@ -327,6 +327,27 @@ def get_dataset(dataset_id: str, conn: sqlite3.Connection = Depends(_conn)):
     return ds
 
 
+@router.patch("/api/v1/datasets/{dataset_id}")
+def update_dataset(dataset_id: str, body: dict = Body(...),
+                   conn: sqlite3.Connection = Depends(_conn)):
+    if "name" in body:
+        body["name"] = str(body.get("name", "")).strip()
+        if not body["name"]:
+            raise HTTPException(status_code=422, detail="'name' cannot be empty")
+    if "description" in body:
+        body["description"] = str(body.get("description") or "")
+
+    ds = repo.update_dataset(
+        conn,
+        dataset_id,
+        name=body.get("name") if "name" in body else None,
+        description=body.get("description") if "description" in body else None,
+    )
+    if ds is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    return ds
+
+
 @router.delete("/api/v1/datasets/{dataset_id}")
 def delete_dataset(dataset_id: str, conn: sqlite3.Connection = Depends(_conn)):
     if not repo.delete_dataset(conn, dataset_id):

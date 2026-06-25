@@ -703,6 +703,12 @@ table.list {
   font-weight: 600; font-size: 14px; line-height: 1.35;
 }
 .ds-card-header .btn-icon { flex: 0 0 auto; }
+.ds-edit {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.ds-edit-actions {
+  display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;
+}
 .ds-card-desc {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; overflow-wrap: anywhere;
@@ -718,8 +724,10 @@ table.list {
 .btn-ghost { background: transparent; color: var(--dim); }
 .btn-ghost:hover { color: var(--ink); }
 .btn-icon { background: none; border: none; cursor: pointer; color: var(--faint);
-  font-size: 16px; line-height: 1; padding: 2px; }
-.btn-icon:hover { color: var(--bad); }
+  font-size: 12px; line-height: 1; padding: 2px; }
+.btn-icon:hover { color: var(--ink); }
+.btn-icon-danger { font-size: 16px; }
+.btn-icon-danger:hover { color: var(--bad); }
 
 .input { width: 100%; padding: 5px 8px; border: 1px solid var(--border);
   border-radius: 4px; font-size: 13px; background: var(--bg); color: var(--ink); }

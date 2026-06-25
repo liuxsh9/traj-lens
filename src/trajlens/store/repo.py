@@ -104,6 +104,10 @@ def create_dataset(conn, *, name: str, description: str = "") -> dict:
 
 
 def get_or_create_dataset(conn, *, name: str, description: str = "") -> dict:
+    if name == "_default":
+        row = conn.execute("SELECT * FROM datasets WHERE id='_default'").fetchone()
+        if row:
+            return dict(row)
     row = conn.execute("SELECT * FROM datasets WHERE name=?", (name,)).fetchone()
     if row:
         return dict(row)
@@ -113,6 +117,20 @@ def get_or_create_dataset(conn, *, name: str, description: str = "") -> dict:
 def get_dataset(conn, dataset_id: str) -> dict | None:
     row = conn.execute("SELECT * FROM datasets WHERE id=?", (dataset_id,)).fetchone()
     return dict(row) if row else None
+
+
+def update_dataset(conn, dataset_id: str, *, name: str | None = None,
+                   description: str | None = None) -> dict | None:
+    current = get_dataset(conn, dataset_id)
+    if current is None:
+        return None
+    next_name = current["name"] if name is None else name
+    next_description = current["description"] if description is None else description
+    conn.execute(
+        "UPDATE datasets SET name=?, description=? WHERE id=?",
+        (next_name, next_description, dataset_id))
+    conn.commit()
+    return get_dataset(conn, dataset_id)
 
 
 def list_datasets(conn) -> list[dict]:

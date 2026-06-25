@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   listBatches, getDatasetStats, listAnnotators, uploadToDataset,
   createJob, getJob, listDatasetJobs, computeMetrics, scanDataset,
+  listDatasets,
   type Batch, type DatasetStats, type AnnotatorInfo, type JobInfo,
 } from "../api";
 import { ListView } from "./ListView";
@@ -13,6 +14,7 @@ interface Props {
   datasetId: string;
   datasetName: string;
   onBack: () => void;
+  onDatasetChange: (name: string) => void;
   onOpen: (hash: string) => void;
 }
 
@@ -430,9 +432,15 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
 
 /* ── Main component ──────────────────────────────────────────────── */
 
-export function DatasetDetail({ datasetId, datasetName, onBack, onOpen }: Props) {
+export function DatasetDetail({ datasetId, datasetName, onBack, onDatasetChange, onOpen }: Props) {
   const qc = useQueryClient();
   const [showStats, setShowStats] = useState(true);
+  const { data: datasets = [] } = useQuery({
+    queryKey: ["datasets"],
+    queryFn: listDatasets,
+  });
+  const dataset = datasets.find((d) => d.id === datasetId);
+  const displayName = dataset?.name || datasetName;
   const { data: batches = [] } = useQuery({
     queryKey: ["batches", datasetId],
     queryFn: () => listBatches(datasetId),
@@ -448,13 +456,17 @@ export function DatasetDetail({ datasetId, datasetName, onBack, onOpen }: Props)
     qc.invalidateQueries({ queryKey: ["trajectories"] });
   }, [qc, datasetId]);
 
+  useEffect(() => {
+    if (dataset && dataset.name !== datasetName) onDatasetChange(dataset.name);
+  }, [dataset, datasetName, onDatasetChange]);
+
   return (
     <div className="page">
       <div className="page-header">
         <button className="btn btn-sm btn-ghost" onClick={onBack}>
           ← Datasets
         </button>
-        <h2 style={{ margin: 0 }}>{datasetName}</h2>
+        <h2 style={{ margin: 0 }}>{displayName}</h2>
         <button
           className="btn btn-sm btn-ghost"
           onClick={() => setShowStats((s) => !s)}
