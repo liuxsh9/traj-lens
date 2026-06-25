@@ -165,11 +165,17 @@ export interface ExportArtifact {
   created_at: string;
 }
 
-export async function createExport(datasetId: string, format: string): Promise<ExportArtifact> {
+export interface ExportParams {
+  format: string;
+  filters?: { field: string; op: string; value: string }[];
+  exclude_hashes?: string[];
+}
+
+export async function createExport(datasetId: string, params: ExportParams): Promise<ExportArtifact> {
   const r = await fetch("/api/v1/exports", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ dataset_id: datasetId, format }),
+    body: JSON.stringify({ dataset_id: datasetId, ...params }),
   });
   if (!r.ok) throw new Error(`export failed: ${r.status}`);
   return r.json();

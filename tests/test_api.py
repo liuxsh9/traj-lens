@@ -70,6 +70,35 @@ def test_export_then_download(tmp_path):
     assert c.get("/api/v1/exports/nope/download").status_code == 404
 
 
+def test_export_respects_filters_and_excludes(tmp_path):
+    """Export set = filters-matched minus exclude_hashes — same query path as the
+    list view, so what you see is what you export."""
+    c = _client(tmp_path)
+    ds = c.post("/api/v1/datasets", json={"name": "exp2"}).json()
+    # two distinct trajectories
+    a = json.loads((FIXTURES / "panguml2_weather.json").read_text())
+    b = json.loads(json.dumps(a))
+    b["messages"][1]["content"] = "totally different first user turn"  # new content_hash
+    body = json.dumps(a) + "\n" + json.dumps(b) + "\n"
+    c.post(f"/api/v1/datasets/{ds['id']}/upload",
+           files={"file": ("u.jsonl", body.encode(), "application/x-ndjson")})
+
+    all_hashes = [r["content_hash"] for r in
+                  c.get(f"/api/v1/datasets/{ds['id']}/trajectories").json()["items"]]
+    assert len(all_hashes) == 2
+
+    # exclude one → export only the other
+    art = c.post("/api/v1/exports", json={
+        "dataset_id": ds["id"], "format": "panguml2",
+        "exclude_hashes": [all_hashes[0]],
+    }).json()
+    assert art["traj_count"] == 1
+    dl = c.get(f"/api/v1/exports/{art['id']}/download").text
+    got = [json.loads(l)["meta_info"]["traj_lens_content_hash"]
+           for l in dl.splitlines() if l.strip()]
+    assert got == [all_hashes[1]]
+
+
 def test_spa_cache_headers(tmp_path):
     """index.html must revalidate (no-cache) so a rebuild never strands the
     browser on a stale bundle; fingerprinted assets cache forever."""

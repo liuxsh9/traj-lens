@@ -201,6 +201,20 @@ def create_export_artifact(conn, *, dataset_id: str, exporter: str,
             "traj_count": traj_count, "output_path": output_path}
 
 
+def query_matching_hashes(conn, *, filters: list[dict] | None = None,
+                          dataset_id: str | None = None) -> list[str]:
+    """All content_hashes in a dataset matching the given filters (no paging).
+
+    Reuses query_trajectories so the export set is byte-identical to what the
+    list view shows under the same filters. ponytail: datasets are thousands of
+    rows, not millions — pulling a big page is fine; a hash-only SELECT is the
+    upgrade path if that ever bites.
+    """
+    res = query_trajectories(conn, limit=1_000_000, offset=0,
+                             filters=filters, dataset_id=dataset_id)
+    return [it["content_hash"] for it in res["items"]]
+
+
 def finalize_export_artifact(conn, export_id: str, *, traj_count: int, output_path: str) -> None:
     conn.execute(
         "UPDATE export_artifacts SET traj_count=?, output_path=? WHERE id=?",

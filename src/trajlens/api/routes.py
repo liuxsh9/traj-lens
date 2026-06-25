@@ -477,7 +477,8 @@ def create_export(request: Request, body: dict = Body(...),
                   conn: sqlite3.Connection = Depends(_conn)):
     dataset_id = body.get("dataset_id", "")
     fmt = body.get("format", "panguml2")
-    output = body.get("output", "export.jsonl")
+    filters = body.get("filters") or None
+    exclude = set(body.get("exclude_hashes") or [])
 
     if not dataset_id:
         raise HTTPException(status_code=422, detail="'dataset_id' required")
@@ -493,16 +494,17 @@ def create_export(request: Request, body: dict = Body(...),
         raise HTTPException(status_code=422, detail=f"unknown format '{fmt}'")
 
     blob_dir = request.app.state.blob_dir
-    hashes = [r["content_hash"] for r in conn.execute("""
-        SELECT DISTINCT i.content_hash FROM ingestions i
-        JOIN batches b ON i.batch_id = b.id AND b.dataset_id = ?
-    """, (dataset_id,)).fetchall()]
+    # Export set = trajectories matching the list-view filters, minus any the
+    # user un-checked. Same query_trajectories path → export matches the list.
+    hashes = [h for h in repo.query_matching_hashes(
+        conn, filters=filters, dataset_id=dataset_id) if h not in exclude]
 
     # Create the artifact first so its id names the file — unique per export, so
     # concurrent exports never clobber each other (old code wrote a fixed
     # "export.jsonl"). UI omits "output"; CLI may still pass an explicit path.
     artifact = repo.create_export_artifact(
-        conn, dataset_id=dataset_id, exporter=fmt, traj_count=0)
+        conn, dataset_id=dataset_id, exporter=fmt, traj_count=0,
+        config={"filters": filters or [], "excluded": len(exclude)})
     out_path = body.get("output") or os.path.join(
         os.path.dirname(blob_dir) or ".", "exports", f"{artifact['id']}.jsonl")
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
