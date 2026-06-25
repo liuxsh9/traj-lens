@@ -231,17 +231,72 @@ def export(
     typer.echo(f"exported {count} trajectories to {output}")
 
 
+def _newest_mtime(root: pathlib.Path, skip: set[str]) -> float:
+    latest = 0.0
+    for dirpath, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in skip]
+        for f in files:
+            try:
+                latest = max(latest, os.path.getmtime(os.path.join(dirpath, f)))
+            except OSError:
+                pass
+    return latest
+
+
+def _ensure_frontend_fresh(web: pathlib.Path | None = None, *, autobuild: bool = True) -> None:
+    """Root-cause fix for the stale-bundle class of bug. web/dist is a gitignored
+    Vite artifact that `serve` only statically hosts — a git pull/push never updates
+    it, so an out-of-date dist silently serves old JS against a newer API (symptom:
+    "undefined imported"). On startup, rebuild dist when any build input under web/
+    is newer (build is <1s). Degrade gracefully — missing npm or a failed build
+    warns loudly but never blocks serving the existing bundle."""
+    import shutil
+    import subprocess
+
+    if web is None:
+        from trajlens.api.app import WEB_DIST
+        web = WEB_DIST.parent
+    src_root = web / "src"
+    if not src_root.is_dir():
+        return  # installed without frontend sources — nothing to build
+    dist = web / "dist"
+    # newest of all build inputs (src, package.json, vite/ts config, index.html)
+    # vs the built bundle. node_modules/dist excluded.
+    inputs_mtime = _newest_mtime(web, {"node_modules", "dist"})
+    dist_mtime = _newest_mtime(dist, set()) if dist.is_dir() else 0.0
+    if dist.is_dir() and dist_mtime >= inputs_mtime:
+        return  # bundle already current
+
+    why = "missing" if not dist.is_dir() else "stale (web source is newer)"
+    if not autobuild:
+        typer.secho(f"⚠ web/dist is {why} — run: cd web && npm run build", fg="yellow", err=True)
+        return
+    if shutil.which("npm") is None:
+        typer.secho(f"⚠ web/dist is {why} and npm not found — serving as-is. "
+                    "Build on a machine with npm: cd web && npm run build", fg="yellow", err=True)
+        return
+    typer.secho(f"web/dist is {why} — rebuilding frontend (cd web && npm run build)…",
+                fg="cyan", err=True)
+    try:
+        subprocess.run(["npm", "run", "build"], cwd=str(web), check=True)
+        typer.secho("✓ frontend rebuilt", fg="green", err=True)
+    except subprocess.CalledProcessError as e:
+        typer.secho(f"⚠ frontend build failed ({e}) — serving existing web/dist", fg="red", err=True)
+
+
 @app.command()
 def serve(host: str = _HOST, port: int = _PORT, db: str = _DB, blob_dir: str = _BLOBS,
-          reload: bool = False):
+          reload: bool = False, build: bool = True):
     """Run the API + web viewer. Pass --reload for dev (auto-restart on code edits).
 
     Host/port default from TRAJLENS_HOST/TRAJLENS_PORT in .env; set host=0.0.0.0
-    to expose on a LAN/server. CLI flags override .env.
+    to expose on a LAN/server. CLI flags override .env. By default a stale/missing
+    web/dist is rebuilt automatically before serving (pass --no-build to skip).
     """
     import uvicorn
     os.environ["TRAJLENS_DB"] = db
     os.environ["TRAJLENS_BLOBS"] = blob_dir
+    _ensure_frontend_fresh(autobuild=build)
     # reload watches src/ and respawns workers; env vars above are inherited.
     uvicorn.run("trajlens.api.app:app", host=host, port=port, reload=reload,
                 reload_dirs=["src"] if reload else None)

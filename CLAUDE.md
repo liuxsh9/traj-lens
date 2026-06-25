@@ -7,7 +7,7 @@ Coding-agent trajectory analysis platform. Ingest raw logs from multiple agent f
 ```bash
 uv run pytest tests/ -x -q          # run tests (need uv, python 3.12)
 uv run trajlens ingest <file>       # ingest JSON/JSONL
-uv run trajlens serve               # API on :8000; serves web/dist if built
+uv run trajlens serve               # API on :8000; auto-builds stale web/dist, then serves it
 cd web && npm run build              # build frontend (Vite+React+TS)
 cd web && npm run dev                # dev server on :5173, proxies /api→:8000
 ```
@@ -75,10 +75,15 @@ the response shape changed under an old bundle). A real production incident: pro
 fixed by `npm run build` alone, without pulling any new source — the source was already
 current, only the bundle was stale.
 
-**Rule — after ANY of these, run `cd web && npm run build` before the app is "done":**
-- you edited anything under `web/src/`
-- you pushed frontend changes (rebuild on the box that serves, or in CI/deploy)
-- you (or a user) `git pull`ed and will run `trajlens serve`
+**Root-cause fix (automatic):** `trajlens serve` now detects a stale/missing `web/dist`
+on startup (any build input under `web/` newer than the bundle) and runs `npm run build`
+itself before serving. Missing npm or a failed build warns loudly but never blocks
+serving the existing bundle. Pass `--no-build` to skip (e.g. prod with a prebuilt dist
+and no node). So a plain `git pull && trajlens serve` always serves a fresh bundle.
+
+**Still rebuild manually when you don't go through `serve`:** CI/deploy that copies
+`web/dist` to a static host, or a `serve` already running when you edit `web/src` (the
+check only runs at startup). Then: `cd web && npm run build`.
 
 Verify the served bundle matches source — `curl -s http://HOST/ | grep -o 'assets/[^"]*\.js'`
 should point at a freshly built hash. `index.html` is served `no-cache` and assets
