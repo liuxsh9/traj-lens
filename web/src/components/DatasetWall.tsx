@@ -95,7 +95,7 @@ export function DatasetWall({ onOpen }: { onOpen: (id: string, name: string) => 
               onClick={() => onOpen(ds.id, ds.name)}
             >
               <div className="ds-card-header">
-                <span className="ds-card-name">{ds.name}</span>
+                <span className="ds-card-name" title={ds.name}>{ds.name}</span>
                 {ds.id !== "_default" && (
                   <button
                     className="btn-icon"
