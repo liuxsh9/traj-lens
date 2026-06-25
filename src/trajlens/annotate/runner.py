@@ -154,7 +154,7 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
     # compute — empty table renders as 0). compute_metrics is cache-aware, so
     # this only does work for the metrics we just invalidated.
     if done > 0:
-        _invalidate_dependent_metrics(conn, spec.id)
+        _invalidate_dependent_metrics(conn, spec.id, content_hashes)
         _recompute_metrics(conn, content_hashes)
 
     return result
@@ -172,7 +172,7 @@ def _recompute_metrics(conn, content_hashes):
         log.debug("metric recompute skipped (metrics module not available)")
 
 
-def _invalidate_dependent_metrics(conn, annotator_id: str):
+def _invalidate_dependent_metrics(conn, annotator_id: str, content_hashes=None):
     """Delete cached metrics that depend on the given annotator."""
     try:
         from trajlens.metrics import REGISTRY
@@ -180,10 +180,17 @@ def _invalidate_dependent_metrics(conn, annotator_id: str):
         to_delete = [name for name, (_fn, _ver, deps) in REGISTRY.items()
                      if annotator_id in deps]
         if to_delete:
-            placeholders = ",".join("?" * len(to_delete))
-            n = conn.execute(
-                f"DELETE FROM metrics WHERE metric_id IN ({placeholders})", to_delete
-            ).rowcount
+            metric_placeholders = ",".join("?" * len(to_delete))
+            params = list(to_delete)
+            where = f"metric_id IN ({metric_placeholders})"
+            if content_hashes is not None:
+                hashes = list(content_hashes)
+                if not hashes:
+                    return
+                hash_placeholders = ",".join("?" * len(hashes))
+                where += f" AND content_hash IN ({hash_placeholders})"
+                params.extend(hashes)
+            n = conn.execute(f"DELETE FROM metrics WHERE {where}", params).rowcount
             conn.commit()
             log.info("invalidated %d cached metrics (%s) after %s run",
                      n, ", ".join(to_delete), annotator_id)

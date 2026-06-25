@@ -7,12 +7,13 @@ from trajlens.store import db as dbmod, repo
 
 import trajlens.metrics.builtins  # noqa: F401 — register built-ins
 from trajlens.metrics import compute_metrics, REGISTRY
+from trajlens.annotate.runner import _invalidate_dependent_metrics, _recompute_metrics
 
 
-def _make_traj():
+def _make_traj(prompt: str = "fix the bug"):
     """Minimal trajectory with 2 user turns, 3 tool calls, multiple steps."""
     items_raw = [
-        {"type": "message", "role": "user", "content": "fix the bug"},
+        {"type": "message", "role": "user", "content": prompt},
         {"type": "reasoning", "content": "thinking..."},
         {"type": "function_call", "name": "read", "arguments": "{}", "call_id": "c1"},
         {"type": "function_call_output", "call_id": "c1", "output": "file contents"},
@@ -66,6 +67,14 @@ def _add_annotations(conn, traj, pushback_labels, resolution_label):
                             annotator_version="r1",
                             value={"resolution": resolution_label, "reason": "test"},
                             inputs_hash="res0")
+
+
+def _put_in_dataset(conn, traj, dataset_name: str):
+    ds = repo.create_dataset(conn, name=dataset_name)
+    batch = repo.create_batch(conn, dataset_id=ds["id"], format="test", name=f"{dataset_name}.jsonl")
+    repo.put_trajectory(conn, traj, batch_id=batch["id"])
+    repo.update_batch_count(conn, batch["id"], 1)
+    return ds
 
 
 # ── Registry ──────────────────────────────────────────────────────────
@@ -209,3 +218,25 @@ def test_staleness_recomputes_on_annotator_version_change(tmp_path):
     # compute_metrics should detect version mismatch and recompute
     r2 = compute_metrics(conn, traj.content_hash)
     assert r2["pushback_count"] == 2  # both are now corrections
+
+
+def test_dependency_invalidation_is_scoped_to_recomputed_dataset(tmp_path):
+    """Re-running annotators for one dataset must not blank another dataset's score."""
+    conn = _db(tmp_path)
+    traj_a = _make_traj()
+    ds_a = _put_in_dataset(conn, traj_a, "A")
+    _add_annotations(conn, traj_a, ["none", "none"], "resolved")
+
+    traj_b = _make_traj("fix the other bug")
+    ds_b = _put_in_dataset(conn, traj_b, "B")
+    _add_annotations(conn, traj_b, ["none", "correction"], "partially_resolved")
+
+    compute_metrics(conn, traj_a.content_hash)
+    compute_metrics(conn, traj_b.content_hash)
+    assert repo.get_dataset_stats(conn, ds_a["id"])["metrics"]["success_score"]["avg"] == 100
+
+    _invalidate_dependent_metrics(conn, "resolution", [traj_b.content_hash])
+    _recompute_metrics(conn, [traj_b.content_hash])
+
+    assert repo.get_dataset_stats(conn, ds_a["id"])["metrics"]["success_score"]["avg"] == 100
+    assert repo.get_dataset_stats(conn, ds_b["id"])["metrics"]["success_score"]["avg"] == 45
