@@ -20,9 +20,10 @@ Pushback = the user resists, corrects, or redirects the agent IN RESPONSE TO wha
 
 Categories (choose exactly one):
 
-- correction — The user steers, redirects, or corrects the agent's course: correcting a misunderstanding, pointing out errors, providing missing context, changing direction after seeing agent output, or narrowing/expanding the scope of the task in response to what the agent produced.
-  KEY SIGNAL: the prompt responds to or builds on what the agent did, but adjusts course rather than accepting it as-is. This includes soft corrections like describing the desired behavior when the current result is wrong.
-  Examples: "I said X not Y", "you changed the wrong file", "actually the API uses POST not GET", "forget that approach, try Y", "on second thought skip the tests" (redirecting after seeing agent's plan), "the scroll lock should stay where the user left it, not reset to 0,0" (implying current behavior is wrong), "I want to simplify this code, can you look?" (requesting a different direction after seeing agent's output)
+- correction — The user steers or corrects the agent because the agent FELL SHORT of what was asked: correcting a misunderstanding, pointing out errors, providing context the agent should have had, or fixing work that missed the existing target.
+  KEY SIGNAL: the agent is at fault — it misread the request, made a mistake, or did the wrong thing given what the user had already specified. The user is restoring the agent to a target that was already in play.
+  Examples: "I said X not Y", "you changed the wrong file", "actually the API uses POST not GET", "the scroll lock should stay where the user left it, not reset to 0,0" (implying current behavior is wrong)
+  NOT correction — a requirement change. If the user simply wants something DIFFERENT now — a new value, new copy, new feature, a change of mind — and the agent had correctly done what was originally asked, that is non_pushback, not correction. The agent didn't fail; the spec moved. Examples: "change the text to 你好世界", "actually make the button blue instead", "let's add pagination too", "on second thought skip the tests". These give a new target; they don't say the agent missed the old one.
 
 - rejection — The user explicitly rejects, reverts, or refuses the agent's output WITHOUT providing a specific correction.
   Examples: "undo that", "revert the last change", "no", "that's wrong", "put it back the way it was"
@@ -35,7 +36,7 @@ Categories (choose exactly one):
   SPECIAL: system-generated interruptions like "[Request interrupted by user for tool use]" or "[Request interrupted by user]" are always non_pushback — they are automatic cancel signals, not user-authored pushback.
 
 Disambiguation:
-- correction vs non_pushback: If there is NO preceding agent action in the context, or the prompt is entirely about a new unrelated topic, choose non_pushback. But if the agent just produced output and the user's next message adjusts, narrows, or redirects that work — even without explicitly saying "you did it wrong" — that is correction.
+- correction vs non_pushback (THE KEY TEST — agent fault): Ask "did the agent fail to do what was asked, or did the user change what they want?" A correction means the agent missed an EXISTING target (wrong file, misread request, broke something). A requirement change means the user moved the target — they want something new or different now, and the agent had correctly done the original ask. Requirement changes are non_pushback even though they react to agent output and adjust course. Only the agent-fault case is correction. If there is NO preceding agent action, choose non_pushback.
 - correction vs rejection: correction provides a specific fix or new direction; rejection just says "no"/"undo" without explaining what to do instead.
 - failure_report vs rejection: failure_report = "it doesn't work" (broken); rejection = "I don't want that" (unwanted even if functional).
 - Repeating a previous instruction verbatim or with minor edits is non_pushback (the user may be retrying or continuing), UNLESS the repetition explicitly references agent failure ("I already told you to...").
@@ -47,7 +48,9 @@ Key principle — implicit pushback: After an agent action, if the user describe
 Think step by step:
 1. What did the agent just do? (Look at the preceding context.)
 2. Is the user's message ABOUT what the agent did, or about something new/unrelated?
-3. If about what the agent did: is it reporting a problem (failure_report), steering/adjusting (correction), rejecting (rejection)?
+3. If about what the agent did: did the AGENT FAIL (missed an existing target, made a mistake)? Or did the USER CHANGE the requirement (wants something new/different now, agent had done the original ask correctly)?
+   - Agent failed → failure_report (broken/error) | correction (specific fix) | rejection (just "no"/"undo")
+   - User changed the requirement → non_pushback
 
 Respond in valid JSON only:
 {"label": "<one of: correction, rejection, failure_report, non_pushback>", "reason": "<1-2 sentence explanation>"}"""

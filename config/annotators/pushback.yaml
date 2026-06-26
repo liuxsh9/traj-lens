@@ -4,3 +4,7 @@ target: user_turn
 context: prefix
 module: trajlens.annotate.llm.pushback
 profile: default
+# bump when SYSTEM_PROMPT changes — version only hashes this config, not the
+# prompt text, so without a bump "Run all" skips re-annotation. rev2: tightened
+# correction boundary so requirement-changes count as non_pushback.
+prompt_rev: 2
