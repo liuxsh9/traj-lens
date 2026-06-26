@@ -18,7 +18,7 @@ import {
   type FilterRule,
 } from "./FilterBar";
 import { useSticky } from "../useSticky";
-import { summarizeAnnotatorProgress } from "./annotatorProgress";
+import { keepLatestJobsByAnnotator, summarizeAnnotatorProgress } from "./annotatorProgress";
 import { HelpButton } from "./HelpDialog";
 
 interface Props {
@@ -390,7 +390,7 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
       setActiveJobs((prev) => {
         const known = new Set(prev.map((j) => j.job_id));
         const extra = relevant.filter((j) => !known.has(j.job_id));
-        return extra.length > 0 ? [...prev, ...extra] : prev;
+        return extra.length > 0 ? keepLatestJobsByAnnotator([...prev, ...extra]) : keepLatestJobsByAnnotator(prev);
       });
     }).catch(() => { /* offline / not built — sticky state still paints */ });
     return () => { cancelled = true; };
@@ -409,7 +409,7 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
           catch { return { ...j, status: "error" }; }
         })
       );
-      setActiveJobs(updated);
+      setActiveJobs(keepLatestJobsByAnnotator(updated));
       if (updated.every((j) => j.status !== "pending")) {
         // annotators recompute their own dependent metrics; this also fills
         // annotation-independent ones (tool_count, etc.) and shows the chip.
@@ -430,7 +430,7 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
         .map((r) => r.value);
       // semgrep batch scan rides along — it's a job too (skipped if not installed)
       try { jobs.push(await scanDataset(datasetId)); } catch { /* semgrep absent */ }
-      if (jobs.length > 0) setActiveJobs(jobs);
+      if (jobs.length > 0) setActiveJobs(keepLatestJobsByAnnotator(jobs));
     } finally {
       setRunning(false);
     }
@@ -440,7 +440,7 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
     setScanNotice(null);
     try {
       const job = await scanDataset(datasetId);
-      setActiveJobs((prev) => [...prev.filter((j) => j.annotator_id !== "semgrep"), job]);
+      setActiveJobs((prev) => keepLatestJobsByAnnotator([...prev, job]));
     } catch (e) {
       // Backend returns 400 when the semgrep CLI isn't installed; anything else
       // is an unexpected failure. Either way, tell the user instead of no-op.
@@ -453,7 +453,7 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
   const runOne = async (a: AnnotatorInfo, force = false) => {
     try {
       const job = await createJob(a.path, datasetId, force);
-      setActiveJobs((prev) => [...prev, job]);
+      setActiveJobs((prev) => keepLatestJobsByAnnotator([...prev, job]));
     } catch { /* backend may reject if LLM profile missing */ }
   };
 

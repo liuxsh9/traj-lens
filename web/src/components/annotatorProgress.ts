@@ -15,6 +15,21 @@ function jobProgress(job: JobInfo): number {
   return Math.max(0, Math.min(1, finished / total));
 }
 
+function jobTime(job: JobInfo): number {
+  return job.created_at ? new Date(job.created_at).getTime() || 0 : 0;
+}
+
+export function keepLatestJobsByAnnotator(jobs: JobInfo[]): JobInfo[] {
+  const latest = new Map<string, JobInfo>();
+  for (const job of jobs) {
+    const cur = latest.get(job.annotator_id);
+    if (!cur || !job.created_at || !cur.created_at || jobTime(job) >= jobTime(cur)) {
+      latest.set(job.annotator_id, job);
+    }
+  }
+  return jobs.filter((job) => latest.get(job.annotator_id)?.job_id === job.job_id);
+}
+
 export function summarizeAnnotatorProgress(activeJobs: JobInfo[]): AnnotatorProgressSummary {
   const finished = activeJobs.reduce(
     (sum, job) => sum + (job.done ?? 0) + (job.skipped ?? 0),

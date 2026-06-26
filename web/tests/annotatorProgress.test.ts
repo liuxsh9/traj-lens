@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { summarizeAnnotatorProgress } from "../src/components/annotatorProgress";
+import { keepLatestJobsByAnnotator, summarizeAnnotatorProgress } from "../src/components/annotatorProgress";
 import type { JobInfo } from "../src/api";
 
 function job(partial: Partial<JobInfo>): JobInfo {
@@ -30,3 +30,19 @@ const done = summarizeAnnotatorProgress([
 ]);
 
 assert.equal(done.pct, 100);
+
+const deduped = keepLatestJobsByAnnotator([
+  job({ job_id: "old", annotator_id: "loop_detect", status: "done", done: 0, skipped: 2, created_at: "2026-06-26T12:23:00Z" }),
+  job({ job_id: "new", annotator_id: "loop_detect", status: "done", done: 2, skipped: 0, created_at: "2026-06-26T12:26:00Z" }),
+  job({ job_id: "pb", annotator_id: "pushback", status: "done", done: 1, skipped: 0, created_at: "2026-06-26T12:24:00Z" }),
+]);
+
+assert.deepEqual(new Set(deduped.map((j) => j.job_id)), new Set(["pb", "new"]));
+assert.equal(deduped.filter((j) => j.annotator_id === "loop_detect").length, 1);
+
+const withFreshPending = keepLatestJobsByAnnotator([
+  job({ job_id: "old", annotator_id: "topic", status: "done", done: 0, skipped: 1, created_at: "2026-06-26T12:23:00Z" }),
+  job({ job_id: "fresh", annotator_id: "topic", status: "pending" }),
+]);
+
+assert.deepEqual(withFreshPending.map((j) => j.job_id), ["fresh"]);
