@@ -7,6 +7,13 @@ import {
   type Batch, type DatasetStats, type AnnotatorInfo, type JobInfo,
 } from "../api";
 import { ListView } from "./ListView";
+import {
+  clearTagFilters,
+  hasTagFilter,
+  isTagFilter,
+  toggleTagFilter,
+  type FilterRule,
+} from "./FilterBar";
 import { useSticky } from "../useSticky";
 import { summarizeAnnotatorProgress } from "./annotatorProgress";
 
@@ -30,9 +37,18 @@ function orderedResolution(resolution: Record<string, number>): [string, number]
   return [...known, ...extra];
 }
 
-function StatsPanel({ stats }: { stats: DatasetStats }) {
+function StatsPanel({
+  stats,
+  filterRules,
+  onFilterRulesChange,
+}: {
+  stats: DatasetStats;
+  filterRules: FilterRule[];
+  onFilterRulesChange: (rules: FilterRule[]) => void;
+}) {
   const resTotal = Object.values(stats.resolution).reduce((a, b) => a + b, 0) || 1;
   const metricKeys = ["overall_score", "turn_count", "step_count", "tool_count", "pushback_count"];
+  const hasSelectedTags = filterRules.some(isTagFilter);
 
   return (
     <div className="stats-panel">
@@ -100,12 +116,33 @@ function StatsPanel({ stats }: { stats: DatasetStats }) {
       </div>
 
       {stats.top_tags.length > 0 && (
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {stats.top_tags.slice(0, 12).map((t) => (
-            <span key={t.tag} className="chip chip-sm">
-              {t.tag} <span className="dim">({t.count})</span>
-            </span>
-          ))}
+        <div className="stats-tags-row">
+          <div className="stats-tags">
+            {stats.top_tags.slice(0, 12).map((t) => {
+              const selected = hasTagFilter(filterRules, t.tag);
+              return (
+                <button
+                  key={t.tag}
+                  type="button"
+                  className={`chip chip-sm stats-tag${selected ? " active" : ""}`}
+                  onClick={() => onFilterRulesChange(toggleTagFilter(filterRules, t.tag))}
+                  title={selected ? `取消筛选 ${t.tag}` : `筛选 ${t.tag}`}
+                >
+                  {t.tag} <span className="dim">({t.count})</span>
+                </button>
+              );
+            })}
+          </div>
+          {hasSelectedTags && (
+            <button
+              type="button"
+              className="chip-x stats-tags-clear"
+              onClick={() => onFilterRulesChange(clearTagFilters(filterRules))}
+              title="清空 tag 筛选"
+            >
+              ×
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -470,6 +507,7 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
 export function DatasetDetail({ datasetId, datasetName, onBack, onDatasetChange, onOpen }: Props) {
   const qc = useQueryClient();
   const [showStats, setShowStats] = useState(true);
+  const [filterRules, setFilterRules] = useSticky<FilterRule[]>(`list:${datasetId}:filters`, []);
   const { data: datasets = [] } = useQuery({
     queryKey: ["datasets"],
     queryFn: listDatasets,
@@ -510,7 +548,13 @@ export function DatasetDetail({ datasetId, datasetName, onBack, onDatasetChange,
         </button>
       </div>
 
-      {showStats && stats && <StatsPanel stats={stats} />}
+      {showStats && stats && (
+        <StatsPanel
+          stats={stats}
+          filterRules={filterRules}
+          onFilterRulesChange={setFilterRules}
+        />
+      )}
 
       <UploadZone datasetId={datasetId} onDone={refreshAll} />
 
@@ -526,7 +570,12 @@ export function DatasetDetail({ datasetId, datasetName, onBack, onDatasetChange,
         </div>
       )}
 
-      <ListView onOpen={onOpen} datasetId={datasetId} />
+      <ListView
+        onOpen={onOpen}
+        datasetId={datasetId}
+        filterRules={filterRules}
+        onFilterRulesChange={setFilterRules}
+      />
     </div>
   );
 }

@@ -770,6 +770,30 @@ table.list {
   display: flex; height: 8px; border-radius: 4px; overflow: hidden;
   background: var(--border-light);
 }
+.stats-tags-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.stats-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.stats-tag {
+  cursor: pointer;
+}
+.stats-tag.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: #c2d5ed;
+}
+.stats-tags-clear {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
 
 /* ── Upload zone ── */
 .upload-zone {

@@ -81,6 +81,33 @@ export function applyFilters(rows: TrajSummary[], rules: FilterRule[]): TrajSumm
 
 let _nextId = 1;
 
+export function makeFilterRule(field: string, op: string, value: string): FilterRule {
+  return { id: _nextId++, field, op, value };
+}
+
+export function isTagFilter(rule: FilterRule): boolean {
+  return rule.field === "tags" && rule.op === "∋";
+}
+
+function sameTagValue(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+export function hasTagFilter(rules: FilterRule[], tag: string): boolean {
+  return rules.some((rule) => isTagFilter(rule) && sameTagValue(rule.value, tag));
+}
+
+export function toggleTagFilter(rules: FilterRule[], tag: string): FilterRule[] {
+  if (hasTagFilter(rules, tag)) {
+    return rules.filter((rule) => !(isTagFilter(rule) && sameTagValue(rule.value, tag)));
+  }
+  return [...rules, makeFilterRule("tags", "∋", tag)];
+}
+
+export function clearTagFilters(rules: FilterRule[]): FilterRule[] {
+  return rules.filter((rule) => !isTagFilter(rule));
+}
+
 export function FilterBar({
   rules, onChange, rows,
 }: {
@@ -133,7 +160,7 @@ export function FilterBar({
 
   const commit = (field: string, op: string, value: string) => {
     if (!value) return;
-    onChange([...rules, { id: _nextId++, field, op, value }]);
+    onChange([...rules, makeFilterRule(field, op, value)]);
     setAdding(null);
     setMenuOpen(false);
   };

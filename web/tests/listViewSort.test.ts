@@ -6,6 +6,7 @@ import {
   getListScoreClass,
   getListSortParams,
   EXPORT_MODE_HINT,
+  shouldResetListForExternalFilters,
   shouldShowExportSelection,
 } from "../src/components/ListView";
 
@@ -61,4 +62,20 @@ assert.equal(shouldShowExportSelection({
   datasetId: "dataset-1",
   total: 0,
   exportMode: true,
+}), false);
+
+assert.equal(shouldResetListForExternalFilters({
+  hasControlledFilters: true,
+  previousKey: null,
+  nextKey: "[]",
+}), false);
+assert.equal(shouldResetListForExternalFilters({
+  hasControlledFilters: true,
+  previousKey: "[]",
+  nextKey: "[tags]",
+}), true);
+assert.equal(shouldResetListForExternalFilters({
+  hasControlledFilters: false,
+  previousKey: "[]",
+  nextKey: "[tags]",
 }), false);

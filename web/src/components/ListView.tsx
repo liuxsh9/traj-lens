@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useSticky } from "../useSticky";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import {
@@ -64,6 +64,18 @@ export function shouldShowExportSelection({
   exportMode: boolean;
 }) {
   return Boolean(datasetId && total > 0 && exportMode);
+}
+
+export function shouldResetListForExternalFilters({
+  hasControlledFilters,
+  previousKey,
+  nextKey,
+}: {
+  hasControlledFilters: boolean;
+  previousKey: string | null;
+  nextKey: string;
+}) {
+  return hasControlledFilters && previousKey !== null && previousKey !== nextKey;
 }
 
 const columns = [
@@ -170,14 +182,25 @@ export function getListColumnIds() {
   return columns.map((column) => column.id);
 }
 
-export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; datasetId?: string }) {
+interface ListViewProps {
+  onOpen: (h: string) => void;
+  datasetId?: string;
+  filterRules?: FilterRule[];
+  onFilterRulesChange?: (rules: FilterRule[]) => void;
+}
+
+export function ListView({ onOpen, datasetId, filterRules: controlledFilterRules, onFilterRulesChange }: ListViewProps) {
   // persist list UI state per dataset so it survives opening a sample (which
   // unmounts this view) and page reloads.
   const k = `list:${datasetId ?? "_all"}`;
   const [page, setPage] = useSticky(`${k}:page`, 0);
   const [pageSize, setPageSize] = useSticky<number>(`${k}:size`, 50);
   const [sorting, setSorting] = useSticky<SortingState>(`${k}:sort`, defaultSorting);
-  const [filterRules, setFilterRules] = useSticky<FilterRule[]>(`${k}:filters`, []);
+  const [localFilterRules, setLocalFilterRules] = useSticky<FilterRule[]>(`${k}:filters`, []);
+  const filterRules = controlledFilterRules ?? localFilterRules;
+  const setFilterRules = onFilterRulesChange ?? setLocalFilterRules;
+  const filterRulesKey = JSON.stringify(filterRules.map((r) => [r.field, r.op, r.value]));
+  const previousControlledFilterRulesKey = useRef<string | null>(null);
 
   // ephemeral selection: default-all-selected, so we only track EXCLUDED hashes
   // (un-checked rows). Survives paging within a session; resets on reload —
@@ -218,7 +241,20 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
     setPage(0);
     setExcluded(new Set());  // matched set changed → exclusions no longer meaningful
     setExportMode(false);
-  }, []);
+  }, [setFilterRules, setPage]);
+
+  useEffect(() => {
+    if (shouldResetListForExternalFilters({
+      hasControlledFilters: Boolean(controlledFilterRules),
+      previousKey: previousControlledFilterRulesKey.current,
+      nextKey: filterRulesKey,
+    })) {
+      setPage(0);
+      setExcluded(new Set());
+      setExportMode(false);
+    }
+    previousControlledFilterRulesKey.current = filterRulesKey;
+  }, [controlledFilterRules, filterRulesKey, setPage]);
 
   const toggleRow = useCallback((hash: string) => {
     setExcluded((prev) => {
