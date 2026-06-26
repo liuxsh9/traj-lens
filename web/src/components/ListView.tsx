@@ -8,7 +8,8 @@ import {
   createColumnHelper,
   type SortingState,
 } from "@tanstack/react-table";
-import { listTrajectories, type TrajSummary, type PageResult } from "../api";
+import { listTrajectories, createExport, listExports, downloadExportUrl,
+  type TrajSummary, type PageResult, type ExportArtifact } from "../api";
 import { FilterBar, type FilterRule } from "./FilterBar";
 
 const PAGE_SIZES = [10, 25, 50, 100] as const;
@@ -131,6 +132,12 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
   const [sorting, setSorting] = useSticky<SortingState>(`${k}:sort`, defaultSorting);
   const [filterRules, setFilterRules] = useSticky<FilterRule[]>(`${k}:filters`, []);
 
+  // ephemeral selection: default-all-selected, so we only track EXCLUDED hashes
+  // (un-checked rows). Survives paging within a session; resets on reload —
+  // intentional, no persistence (see CLAUDE.md: trim/mask/selection don't touch
+  // canonical). Filter change clears it: the matched set just changed.
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+
   // derive server params from UI state
   const effectiveSorting = sorting.length > 0 ? sorting : defaultSorting;
   const { sortBy, sortDir } = getListSortParams(effectiveSorting);
@@ -161,6 +168,16 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
   const handleFilterChange = useCallback((rules: FilterRule[]) => {
     setFilterRules(rules);
     setPage(0);
+    setExcluded(new Set());  // matched set changed → exclusions no longer meaningful
+  }, []);
+
+  const toggleRow = useCallback((hash: string) => {
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      if (next.has(hash)) next.delete(hash);
+      else next.add(hash);
+      return next;
+    });
   }, []);
 
   // reset to page 0 when sort changes
@@ -184,6 +201,10 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
     onOpen(hash);
   }, [onOpen]);
 
+  // export = matched set minus un-checked rows. selectedCount is exact across
+  // pages: total is the server's filtered count, excluded is the un-check set.
+  const selectedCount = Math.max(0, total - excluded.size);
+
   // For FilterBar: fetch all rows for enum/tag options (lightweight — only needed for dropdown hints)
   // ponytail: reuse current page data for options; at scale, a dedicated /facets endpoint is better
   const allLoadedRows = items;
@@ -196,6 +217,16 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
       </div>
 
       <FilterBar rules={filterRules} onChange={handleFilterChange} rows={allLoadedRows} />
+
+      {datasetId && total > 0 && (
+        <ExportBar
+          datasetId={datasetId}
+          filters={apiFilters}
+          excluded={excluded}
+          selectedCount={selectedCount}
+          onClearExclusions={() => setExcluded(new Set())}
+        />
+      )}
 
       {total > 0 && (
         <div className="stats-bar">
@@ -223,6 +254,25 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
+                {datasetId && (
+                  <th style={{ width: 28 }}>
+                    <input
+                      type="checkbox"
+                      title="全选/取消当前页"
+                      checked={items.every((r) => !excluded.has(r.content_hash))}
+                      onChange={(e) => {
+                        setExcluded((prev) => {
+                          const next = new Set(prev);
+                          for (const r of items) {
+                            if (e.target.checked) next.delete(r.content_hash);
+                            else next.add(r.content_hash);
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                  </th>
+                )}
                 {hg.headers.map((h) => (
                   <th
                     key={h.id}
@@ -240,6 +290,15 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
           <tbody>
             {table.getRowModel().rows.map((row) => (
               <tr key={row.id} onClick={() => handleRowClick(row.original.content_hash)}>
+                {datasetId && (
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={!excluded.has(row.original.content_hash)}
+                      onChange={() => toggleRow(row.original.content_hash)}
+                    />
+                  </td>
+                )}
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -254,6 +313,77 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
       {total > 0 && (
         <Pagination page={page} totalPages={totalPages} pageSize={pageSize}
           onChange={setPage} onPageSizeChange={handlePageSizeChange} />
+      )}
+    </div>
+  );
+}
+
+// ── Export bar ──────────────────────────────────────────────────────────
+
+const EXPORT_FORMATS = ["panguml2"];  // ponytail: add as exporters register
+
+function ExportBar({ datasetId, filters, excluded, selectedCount, onClearExclusions }: {
+  datasetId: string;
+  filters: { field: string; op: string; value: string }[];
+  excluded: Set<string>;
+  selectedCount: number;
+  onClearExclusions: () => void;
+}) {
+  const [format, setFormat] = useState(EXPORT_FORMATS[0]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const { data: exports = [], refetch } = useQuery({
+    queryKey: ["exports", datasetId],
+    queryFn: () => listExports(datasetId),
+  });
+
+  const run = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const art = await createExport(datasetId, {
+        format,
+        filters: filters.length ? filters : undefined,
+        exclude_hashes: excluded.size ? [...excluded] : undefined,
+      });
+      refetch();
+      window.open(downloadExportUrl(art.id), "_blank");
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="export-bar">
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button className="btn btn-sm" onClick={run} disabled={busy || selectedCount === 0}>
+          {busy ? "导出中…" : `导出 ${selectedCount} 条`}
+        </button>
+        <select className="btn btn-sm btn-ghost" value={format}
+          onChange={(e) => setFormat(e.target.value)} disabled={busy}>
+          {EXPORT_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        {excluded.size > 0 && (
+          <span className="faint" style={{ fontSize: 11 }}>
+            已取消 {excluded.size} 条 ·
+            <button className="link-btn" onClick={onClearExclusions} style={{ marginLeft: 4 }}>恢复全选</button>
+          </span>
+        )}
+        {err && <span className="dim" style={{ fontSize: 11, color: "var(--bad)" }}>{err}</span>}
+      </div>
+      {exports.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+          {exports.slice(0, 5).map((x: ExportArtifact) => (
+            <div key={x.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+              <span className="chip-sm">{x.exporter}</span>
+              <span className="faint">{x.traj_count} 条</span>
+              <span className="faint">{x.created_at?.slice(0, 19).replace("T", " ")}</span>
+              <a className="link-btn" href={downloadExportUrl(x.id)} target="_blank" rel="noreferrer">↓ 下载</a>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
