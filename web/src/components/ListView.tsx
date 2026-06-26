@@ -157,6 +157,24 @@ const columns = [
     },
     enableSorting: false,
   }),
+  col.accessor((r) => r.metrics?.loop_count ?? 0, {
+    id: "loop",
+    header: "loop",
+    cell: (c) => {
+      const v = c.getValue();
+      return v > 0 ? <span style={{ color: "var(--bad)" }}>{v}</span> : <span className="faint">0</span>;
+    },
+    enableSorting: false,
+  }),
+  col.accessor((r) => r.metrics?.recovery_count ?? 0, {
+    id: "recovery",
+    header: "rec",
+    cell: (c) => {
+      const v = c.getValue();
+      return v > 0 ? <span style={{ color: "var(--good)" }}>{v}</span> : <span className="faint">0</span>;
+    },
+    enableSorting: false,
+  }),
   col.accessor((r) => r.metrics?.introduced_findings_count ?? -1, {
     id: "sec",
     header: "sec",

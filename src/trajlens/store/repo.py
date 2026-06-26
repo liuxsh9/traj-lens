@@ -584,6 +584,8 @@ def query_trajectories(
         MAX(CASE WHEN m.metric_id='pushback_count' THEN CAST(m.value AS INTEGER) END) AS pushback_count,
         MAX(CASE WHEN m.metric_id='overall_score' THEN CAST(m.value AS REAL) END) AS overall_score,
         MAX(CASE WHEN m.metric_id='tool_intensity' THEN m.value END) AS tool_intensity,
+        MAX(CASE WHEN m.metric_id='loop_count' THEN CAST(m.value AS INTEGER) END) AS loop_count,
+        MAX(CASE WHEN m.metric_id='recovery_count' THEN CAST(m.value AS INTEGER) END) AS recovery_count,
         MAX(CASE WHEN m.metric_id='introduced_findings_count' THEN CAST(m.value AS INTEGER) END) AS introduced_findings_count,
         MAX(CASE WHEN m.metric_id='acceptance_likelihood' THEN CAST(m.value AS REAL) END) AS acceptance_likelihood,
         -- annotations (resolution + topic + hard_interruption + change_acceptance)
@@ -699,6 +701,8 @@ def query_trajectories(
                 "tool_count": r["tool_count"] or 0,
                 "pushback_count": r["pushback_count"] or 0,
                 "overall_score": r["overall_score"] if r["overall_score"] is not None else -1,
+                "loop_count": r["loop_count"] or 0,
+                "recovery_count": r["recovery_count"] or 0,
                 "introduced_findings_count": r["introduced_findings_count"] if r["introduced_findings_count"] is not None else -1,
                 "acceptance_likelihood": r["acceptance_likelihood"],  # None when no code edited (N/A)
                 **({"error_steps": ti["error_steps"], "recovery_rate": ti["recovery_rate"]} if ti else {}),

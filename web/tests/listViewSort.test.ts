@@ -21,6 +21,8 @@ assert.deepEqual(getListColumnIds(), [
   "acceptance",
   "pb",
   "errors",
+  "loop",
+  "recovery",
   "sec",
   "score",
   "created_at",

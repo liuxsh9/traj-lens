@@ -73,6 +73,30 @@ def tool_intensity(traj: Trajectory, conn, anns) -> dict:
     }
 
 
+@register("recovery_count", _VERSION, depends_on=["error_recovery"])
+def recovery_count(traj: Trajectory, conn, anns) -> int:
+    count = 0
+    for a in anns:
+        if a["annotator_id"] != "error_recovery":
+            continue
+        v = json.loads(a["value"]) if isinstance(a["value"], str) else a["value"]
+        if v.get("has_error") and v.get("recovered") is True:
+            count += 1
+    return count
+
+
+@register("loop_count", _VERSION, depends_on=["loop_detect"])
+def loop_count(traj: Trajectory, conn, anns) -> int:
+    count = 0
+    for a in anns:
+        if a["annotator_id"] != "loop_detect":
+            continue
+        v = json.loads(a["value"]) if isinstance(a["value"], str) else a["value"]
+        if v.get("detected"):
+            count += 1
+    return count
+
+
 @register("acceptance_likelihood", _VERSION, depends_on=["change_acceptance"])
 def acceptance_likelihood(traj: Trajectory, conn, anns) -> float | None:
     """0–100 likelihood that the session's code changes were accepted.

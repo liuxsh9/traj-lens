@@ -133,6 +133,8 @@ def test_list_with_metrics(tmp_path):
     rows = repo.list_trajectories_with_metrics(conn)
     assert len(rows) == 1
     assert rows[0]["metrics"]["turn_count"] == 2
+    assert rows[0]["metrics"]["loop_count"] == 0
+    assert rows[0]["metrics"]["recovery_count"] == 0
     assert "annotations" in rows[0]
 
 
@@ -238,6 +240,22 @@ def test_overall_score_dimensions():
     assert fn(None, None, _anns(accept="low", loop=True, errors=[(True, False)])) == 55.0
     # clamps at 0
     assert fn(None, None, _anns(resolution="unresolved", loop=True)) == 0.0
+
+
+def test_loop_and_recovery_counts_from_annotations():
+    from trajlens.metrics import REGISTRY
+
+    anns = [
+        {"annotator_id": "loop_detect", "value": {"detected": True}, "target_idx": 0},
+        {"annotator_id": "loop_detect", "value": {"detected": False}, "target_idx": 1},
+        {"annotator_id": "loop_detect", "value": {"detected": True}, "target_idx": 2},
+        {"annotator_id": "error_recovery", "value": {"has_error": True, "recovered": True}, "target_idx": 0},
+        {"annotator_id": "error_recovery", "value": {"has_error": True, "recovered": False}, "target_idx": 1},
+        {"annotator_id": "error_recovery", "value": {"has_error": False, "recovered": False}, "target_idx": 2},
+    ]
+
+    assert REGISTRY["loop_count"][0](None, None, anns) == 2
+    assert REGISTRY["recovery_count"][0](None, None, anns) == 1
 
 
 # ── Staleness ─────────────────────────────────────────────────────────
