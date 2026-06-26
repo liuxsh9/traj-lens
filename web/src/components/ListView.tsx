@@ -48,6 +48,7 @@ const sortFieldMap: Record<string, string> = {
 };
 
 const defaultSorting: SortingState = [{ id: "score", desc: true }];
+export const LIST_SORT_DESC_FIRST = true;
 
 export function getListSortParams(sorting: SortingState) {
   const activeSort = sorting[0] ?? defaultSorting[0];
@@ -293,6 +294,7 @@ export function ListView({ onOpen, datasetId, filterRules: controlledFilterRules
     onSortingChange: handleSortChange,
     getCoreRowModel: getCoreRowModel(),
     manualSorting: true,
+    sortDescFirst: LIST_SORT_DESC_FIRST,
   });
 
   const handleRowClick = useCallback((hash: string) => {

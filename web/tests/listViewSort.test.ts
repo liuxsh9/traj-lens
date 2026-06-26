@@ -5,12 +5,14 @@ import {
   getListColumnIds,
   getListScoreClass,
   getListSortParams,
+  LIST_SORT_DESC_FIRST,
   EXPORT_MODE_HINT,
   shouldResetListForExternalFilters,
   shouldShowExportSelection,
 } from "../src/components/ListView";
 
 assert.deepEqual(getListSortParams([]), { sortBy: "score", sortDir: "desc" });
+assert.equal(LIST_SORT_DESC_FIRST, true);
 
 assert.deepEqual(
   Object.fromEntries(getListColumnIds().map((id) => [id, getListSortParams([{ id, desc: true }]).sortBy])),
