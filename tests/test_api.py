@@ -1,4 +1,5 @@
 import json
+import time
 
 from fastapi.testclient import TestClient
 
@@ -11,12 +12,23 @@ def _client(tmp_path):
     return TestClient(app)
 
 
+def _upload_and_wait(c: TestClient, dataset_id: str, body: str) -> dict:
+    r = c.post(f"/api/v1/datasets/{dataset_id}/upload",
+               files={"file": ("u.jsonl", body.encode(), "application/x-ndjson")})
+    jid = r.json()["job_id"]
+    for _ in range(50):
+        time.sleep(0.1)
+        j = c.get(f"/api/v1/jobs/{jid}").json()
+        if j["status"] != "pending":
+            return j
+    raise AssertionError("upload job never finished")
+
+
 def test_upload_done_survives_metric_failure(tmp_path, monkeypatch):
     """Regression: a crash in the post-insert metric loop must not un-'done' an
     upload whose rows already landed. Pre-fix, status="done" was set AFTER the
     (minutes-long) compute_metrics loop with no guard, so any metric error
     flipped the job to "error" and the data looked lost until a manual refresh."""
-    import time
     import trajlens.metrics as metrics
 
     monkeypatch.setattr(metrics, "compute_metrics",
@@ -49,8 +61,7 @@ def test_export_then_download(tmp_path):
     c = _client(tmp_path)
     ds = c.post("/api/v1/datasets", json={"name": "exp"}).json()
     obj = json.loads((FIXTURES / "panguml2_weather.json").read_text())
-    c.post(f"/api/v1/datasets/{ds['id']}/upload",
-           files={"file": ("u.jsonl", (json.dumps(obj) + "\n").encode(), "application/x-ndjson")})
+    _upload_and_wait(c, ds["id"], json.dumps(obj) + "\n")
 
     a1 = c.post("/api/v1/exports", json={"dataset_id": ds["id"], "format": "panguml2"}).json()
     a2 = c.post("/api/v1/exports", json={"dataset_id": ds["id"], "format": "panguml2"}).json()
@@ -80,8 +91,7 @@ def test_export_respects_filters_and_excludes(tmp_path):
     b = json.loads(json.dumps(a))
     b["messages"][1]["content"] = "totally different first user turn"  # new content_hash
     body = json.dumps(a) + "\n" + json.dumps(b) + "\n"
-    c.post(f"/api/v1/datasets/{ds['id']}/upload",
-           files={"file": ("u.jsonl", body.encode(), "application/x-ndjson")})
+    _upload_and_wait(c, ds["id"], body)
 
     all_hashes = [r["content_hash"] for r in
                   c.get(f"/api/v1/datasets/{ds['id']}/trajectories").json()["items"]]
