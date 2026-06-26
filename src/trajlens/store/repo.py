@@ -327,7 +327,7 @@ def get_dataset_stats(conn, dataset_id: str) -> dict:
         "total": total,
         "metrics": metrics_summary,
         "resolution": dict(res_dist),
-        "top_tags": [{"tag": t, "count": c} for t, c in tag_counter.most_common(20)],
+        "top_tags": [{"tag": t, "count": c} for t, c in tag_counter.most_common()],
         "batches": [dict(r) for r in batches],
         "security": {
             "scanned": sec_row["scanned"] or 0,

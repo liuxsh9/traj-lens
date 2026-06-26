@@ -3,6 +3,8 @@ import {
   formatAnnotatorLabel,
   formatAnnotatorTarget,
   sortAnnotatorsForDisplay,
+  visibleStatsTags,
+  COLLAPSED_TAG_LIMIT,
 } from "../src/components/DatasetDetail";
 import type { AnnotatorInfo } from "../src/api";
 
@@ -23,3 +25,8 @@ assert.deepEqual(
   ]).map((a) => a.id),
   ["resolution", "change_acceptance", "pushback", "loop_detect"],
 );
+
+const tags = Array.from({ length: 12 }, (_, i) => `tag-${i}`);
+assert.equal(COLLAPSED_TAG_LIMIT, 10);
+assert.deepEqual(visibleStatsTags(tags, false), tags.slice(0, 10));
+assert.deepEqual(visibleStatsTags(tags, true), tags);

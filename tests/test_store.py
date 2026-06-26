@@ -227,3 +227,33 @@ def test_query_trajectories_tag_filters_can_match_any(tmp_path):
         {"field": "tags", "op": "∋", "value": "后端", "mode": "any"},
     ])
     assert any_mode["total"] == 3
+
+
+def test_dataset_stats_returns_all_tags(tmp_path):
+    conn = dbmod.connect(str(tmp_path / "t.db")); dbmod.migrate(conn)
+    ds = repo.create_dataset(conn, name="many-tags")
+    batch = repo.create_batch(conn, dataset_id=ds["id"], format="test")
+    repo.register_annotator(conn, id="topic", version="v1", config_hash="cfg")
+    raw_bytes = (FIXTURES / "panguml2_weather.json").read_bytes()
+    traj, _ = detect_and_parse(json.loads(raw_bytes))
+
+    for idx in range(25):
+        t = traj.model_copy(deep=True)
+        t.items[1].content = f"many tags user turn {idx}"
+        t.content_hash = content_hash(t.items, t.tools)
+        h = repo.put_trajectory(conn, t, source_path=f"{idx}.json", batch_id=batch["id"])
+        repo.link_annotation_target(conn, target_hash=h, content_hash=h, target_type="trajectory", target_idx=0)
+        conn.commit()
+        repo.put_annotation(
+            conn,
+            target_hash=h,
+            annotator_id="topic",
+            annotator_version="v1",
+            value={"tags": [f"tag-{idx:02d}"]},
+            inputs_hash="test",
+        )
+
+    stats = repo.get_dataset_stats(conn, ds["id"])
+
+    assert len(stats["top_tags"]) == 25
+    assert {t["tag"] for t in stats["top_tags"]} == {f"tag-{idx:02d}" for idx in range(25)}

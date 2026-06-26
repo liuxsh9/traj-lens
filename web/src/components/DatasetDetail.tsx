@@ -33,11 +33,16 @@ const RES_COLORS: Record<string, string> = {
   unresolved: "var(--bad)", indeterminate: "var(--faint)",
 };
 const RES_ORDER = ["resolved", "partially_resolved", "unresolved", "indeterminate"];
+export const COLLAPSED_TAG_LIMIT = 10;
 
 function orderedResolution(resolution: Record<string, number>): [string, number][] {
   const known = RES_ORDER.filter((k) => k in resolution).map((k) => [k, resolution[k]] as [string, number]);
   const extra = Object.entries(resolution).filter(([k]) => !RES_ORDER.includes(k));
   return [...known, ...extra];
+}
+
+export function visibleStatsTags<T>(tags: T[], expanded: boolean): T[] {
+  return expanded ? tags : tags.slice(0, COLLAPSED_TAG_LIMIT);
 }
 
 function StatsPanel({
@@ -49,12 +54,15 @@ function StatsPanel({
   filterRules: FilterRule[];
   onFilterRulesChange: (rules: FilterRule[]) => void;
 }) {
+  const [tagsExpanded, setTagsExpanded] = useState(false);
   const resTotal = Object.values(stats.resolution).reduce((a, b) => a + b, 0) || 1;
   const metricKeys = ["overall_score", "turn_count", "step_count", "tool_count", "pushback_count"];
   const selectedTagCount = filterRules.filter(isTagFilter).length;
   const hasSelectedTags = selectedTagCount > 0;
   const tagFilterMode = getTagFilterMode(filterRules);
   const setMode = (mode: TagFilterMode) => onFilterRulesChange(setTagFilterMode(filterRules, mode));
+  const visibleTags = visibleStatsTags(stats.top_tags, tagsExpanded);
+  const canExpandTags = stats.top_tags.length > COLLAPSED_TAG_LIMIT;
 
   return (
     <div className="stats-panel">
@@ -124,7 +132,7 @@ function StatsPanel({
       {stats.top_tags.length > 0 && (
         <div className="stats-tags-row">
           <div className="stats-tags">
-            {stats.top_tags.slice(0, 12).map((t) => {
+            {visibleTags.map((t) => {
               const selected = hasTagFilter(filterRules, t.tag);
               return (
                 <button
@@ -139,8 +147,17 @@ function StatsPanel({
               );
             })}
           </div>
-          {hasSelectedTags && (
+          {(canExpandTags || hasSelectedTags) && (
             <div className="stats-tags-controls">
+              {canExpandTags && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost stats-tags-toggle"
+                  onClick={() => setTagsExpanded((v) => !v)}
+                >
+                  {tagsExpanded ? "收起" : `展开 ${stats.top_tags.length - COLLAPSED_TAG_LIMIT}`}
+                </button>
+              )}
               {selectedTagCount > 1 && (
                 <div className="segmented stats-tag-mode" aria-label="tag 筛选模式">
                   <button
