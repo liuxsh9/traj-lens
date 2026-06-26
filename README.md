@@ -50,6 +50,20 @@ uv run trajlens serve --host 0.0.0.0 --port 9000
 
 ---
 
+## 长什么样
+
+**数据集墙**：每个语料一张卡，轨迹数 / 批次数 / 来源一目了然。
+
+![数据集墙](docs/screenshots/01-dataset-wall.png)
+
+**数据集详情**：统计面板（平均分 / resolution 分布 / 各指标 min·avg·max / 标签云 / 引入漏洞数）+ 可排序筛选的轨迹表 + 一键跑标注器 / 算指标 / 安全扫描 / 导出。
+
+![数据集详情](docs/screenshots/02-dataset-detail.png)
+
+**单轨迹 viewer**：左侧 minimap 全局形状，可折叠 run/step 卡显示工具链（`read → bash → replace_all`），pushback 红色高亮，TASK/REPLY bookend，展开即 typed-item 转录。
+
+![单轨迹 viewer](docs/screenshots/03-trajectory-viewer.png)
+
 ## 它做什么
 
 - **统一中间格式**：多样输入（CC jsonl / Codex / panguml2 训练数据 / SWE-chat / 自研…）→ 两层内容寻址模型（raw 字节真相 + Items-canonical 分析真相，OpenAI Responses 风格 typed items）+ 出处指针。
