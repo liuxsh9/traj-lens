@@ -1,6 +1,7 @@
 """USER_TURN LLM annotator — classifies user prompt intent (implement/debug/refactor/explain/other)."""
 import json
 
+from trajlens.annotate.llm import UnparseableResponse
 from trajlens.core.model import Item
 
 SCHEMA = {
@@ -63,7 +64,7 @@ def build(unit: list, ctx: list) -> list[dict]:
 def parse(response: str) -> dict:
     data = _loads(response)
     if data is None:
-        return {"intent": "other", "reason": "unparseable response"}
+        raise UnparseableResponse(response)
     intent = data.get("intent", "other")
     if intent not in ("implement", "debug", "refactor", "explain", "other"):
         intent = "other"

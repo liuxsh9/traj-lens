@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from trajlens.annotate.llm import pushback
+from trajlens.annotate.llm import UnparseableResponse, pushback
 from trajlens.core.model import FunctionCallItem, FunctionCallOutputItem, MessageItem
 
 
@@ -71,10 +71,11 @@ def test_parse_json_embedded_in_prose():
     assert out["category"] == "correction"
 
 
-def test_parse_malformed_returns_default():
-    out = pushback.parse("I cannot classify this message.")
-    assert out["category"] == "none"
-    assert out["confidence"] == 0.0
+def test_parse_unparseable_raises():
+    # An unparseable response must NOT become a fabricated "none" — it raises so
+    # runner.py records an error and writes no annotation (retryable on re-run).
+    with pytest.raises(UnparseableResponse):
+        pushback.parse("I cannot classify this message.")
 
 
 def test_parse_unknown_label_falls_back_to_none():

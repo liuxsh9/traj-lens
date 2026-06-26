@@ -1,6 +1,8 @@
 """Tests for intent LLM annotator — build() and parse() only (no LLM calls)."""
+import pytest
+
 from trajlens.core.model import MessageItem
-from trajlens.annotate.llm import intent
+from trajlens.annotate.llm import UnparseableResponse, intent
 
 
 def _user(text):
@@ -40,8 +42,11 @@ def test_parse_unknown_intent_falls_back():
     assert intent.parse('{"intent": "unknown_category", "reason": "x"}')["intent"] == "other"
 
 
-def test_parse_garbage():
-    assert intent.parse("not json at all")["intent"] == "other"
+def test_parse_garbage_raises():
+    # Unparseable → raise, not a fabricated "other". runner.py then records the
+    # error and writes no annotation, so a re-run retries the target.
+    with pytest.raises(UnparseableResponse):
+        intent.parse("not json at all")
 
 
 def test_schema_has_all_intents():

@@ -1,6 +1,7 @@
 """SESSION-level LLM annotator — generates a Chinese title + summary for the trajectory."""
 import json
 
+from trajlens.annotate.llm import UnparseableResponse
 from trajlens.core.model import Item
 
 SCHEMA = {
@@ -103,7 +104,7 @@ def build(unit: list, ctx: list) -> list[dict]:
 def parse(response: str) -> dict:
     data = _loads(response)
     if data is None:
-        return {"title": "", "summary": "", "tags": []}
+        raise UnparseableResponse(response)
     return {
         "title": data.get("title", ""),
         "summary": data.get("summary", ""),

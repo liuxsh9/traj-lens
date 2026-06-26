@@ -1,6 +1,7 @@
 """SESSION-level LLM annotator — classifies whether the task was resolved."""
 import json
 
+from trajlens.annotate.llm import UnparseableResponse
 from trajlens.core.model import Item
 
 SCHEMA = {
@@ -129,7 +130,7 @@ _LABEL_MAP = {
 def parse(response: str) -> dict:
     data = _loads(response)
     if data is None:
-        return {"resolution": "indeterminate", "reason": "unparseable response"}
+        raise UnparseableResponse(response)
     raw_label = data.get("label", "indeterminate")
     return {
         "resolution": _LABEL_MAP.get(raw_label, "indeterminate"),

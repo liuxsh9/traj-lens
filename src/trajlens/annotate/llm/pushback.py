@@ -1,6 +1,7 @@
 """USER_TURN LLM annotator — classifies user pushback (correction/rejection/failure_report/none)."""
 import json
 
+from trajlens.annotate.llm import UnparseableResponse
 from trajlens.core.model import Item
 
 SCHEMA = {
@@ -54,8 +55,6 @@ Think step by step:
 
 Respond in valid JSON only:
 {"label": "<one of: correction, rejection, failure_report, non_pushback>", "reason": "<1-2 sentence explanation>"}"""
-
-_DEFAULT = {"category": "none", "confidence": 0.0, "reason": "unparseable response"}
 
 
 def _summarize(it: Item, max_chars: int = 200) -> str:
@@ -120,7 +119,7 @@ _LABEL_MAP = {"non_pushback": "none", "correction": "correction",
 def parse(response: str) -> dict:
     data = _loads(response)
     if data is None:
-        return dict(_DEFAULT)
+        raise UnparseableResponse(response)
     raw_label = data.get("label", data.get("category", "non_pushback"))
     category = _LABEL_MAP.get(raw_label, "none")
     return {
