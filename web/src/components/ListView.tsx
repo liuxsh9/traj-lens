@@ -259,12 +259,16 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
   // ponytail: reuse current page data for options; at scale, a dedicated /facets endpoint is better
   const allLoadedRows = items;
 
+  const isEmbedded = Boolean(datasetId);
+
   return (
-    <div className="page">
-      <div className="list-header">
-        <h1>traj-lens</h1>
-        {isFetching && !isLoading && <span className="faint" style={{ fontSize: 11 }}>加载中…</span>}
-      </div>
+    <div className={isEmbedded ? "list-view" : "page"}>
+      {!isEmbedded && (
+        <div className="list-header">
+          <h1>traj-lens</h1>
+          {isFetching && !isLoading && <span className="faint" style={{ fontSize: 11 }}>加载中…</span>}
+        </div>
+      )}
 
       <FilterBar rules={filterRules} onChange={handleFilterChange} rows={allLoadedRows} />
 
