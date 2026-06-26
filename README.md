@@ -47,6 +47,50 @@ Claude Code / Codex / OpenCode 等 Coding Agent = **LLM + 脚手架**。traj-len
 
 加输入 / 加标注 / 加指标 / 加导出格式 = 注册一个新函数（LLM 标注器甚至只是一个 yaml），core 不动。
 
+## 第三方系统集成
+
+让别的系统（如同机部署的 Dataviewer）一键把服务器上的轨迹文件送进 traj-lens 分析，无需用户「下载再上传」。三个能力，全部 **opt-in**——不配环境变量则行为与今天完全一致。
+
+**1. 自描述清单**（无需鉴权，集成方第一步调它，不用猜）：
+
+```bash
+curl http://HOST/api/v1/integration
+# {"auth_required": false, "ingest_roots": ["/data/trajectories"],
+#  "formats": ["openai_messages","claude_code","codex","swe_chat"], ...}
+```
+
+**2. 按服务器路径直读 ingest**（同机同盘场景：传绝对路径，traj-lens 直接读盘，零拷贝、异步）：
+
+```bash
+curl -XPOST http://HOST/api/v1/ingest/path \
+  -H 'Authorization: Bearer $TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{"path": "/data/trajectories/foo.jsonl"}'
+# → {"job_id": "...", "dataset_id": "...", "dataset_name": "foo", "status": "pending"}
+# 轮询 GET /api/v1/jobs/{job_id} 看进度；dataset_id 可直接拼跳转 URL
+```
+
+- `dataset` 缺省 = 文件名（`foo.jsonl` → 数据集 `foo`）；可显式传 `"dataset"` 归到指定数据集。
+- **幂等**：同文件 ingest 多次安全（按 `content_hash` 去重），集成方可无脑重试。
+
+**3. 两个环境变量**（都不配 = 功能关闭 + 无鉴权，向后兼容）：
+
+| 变量 | 作用 |
+|---|---|
+| `TRAJLENS_INGEST_ROOTS` | 冒号分隔的允许根目录；路径直读必须 resolve 后落在其下，否则 403（防 `../` 穿越）。不配则 `/ingest/path` 一律 403。 |
+| `TRAJLENS_INGEST_TOKEN` | 配了则 `/ingest/path` 要求 `Authorization: Bearer <token>`；不配则放行。 |
+
+**反向代理到子路径**（推荐部署形态：两服务解耦 + 统一域名）。前端所有路径走 `import.meta.env.BASE_URL`，构建时设 `VITE_BASE` 即可挂到子路径，nginx 简单 `proxy_pass` 不用改写：
+
+```bash
+cd web && VITE_BASE=/trajlens/ npm run build     # 构建带 /trajlens/ 前缀的前端
+```
+```nginx
+location /trajlens/ { proxy_pass http://127.0.0.1:18080/; }
+```
+
+独立部署时 `VITE_BASE` 不设（默认 `/`），一切照旧。
+
 ## 技术栈
 
 Python 3.12+（uv）· Pydantic v2 · FastAPI · stdlib `sqlite3` · 官方 `openai` SDK · React + Vite + Tailwind + TanStack。单仓库、单可部署物（`trajlens serve` 同时供 API + 托管前端）。

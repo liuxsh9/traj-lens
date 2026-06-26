@@ -1,3 +1,10 @@
+// Prefix every API path with the app's base path so calls resolve correctly
+// whether served standalone ("/") or reverse-proxied under a sub-path
+// ("/trajlens/"). BASE_URL is "/" or "/trajlens/" (set via VITE_BASE at build);
+// strip the trailing slash so u("/api/...") never doubles up.
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const u = (path: string): string => API_BASE + path;
+
 export interface Provenance {
   content_hash: string;
   origin: string;
@@ -90,8 +97,8 @@ export async function listTrajectories(params: ListParams = {}, datasetId?: stri
   if (params.sort_dir) q.set("sort_dir", params.sort_dir);
   if (params.filters?.length) q.set("filters", JSON.stringify(params.filters));
   const base = datasetId
-    ? `/api/v1/datasets/${datasetId}/trajectories`
-    : `/api/v1/trajectories`;
+    ? u(`/api/v1/datasets/${datasetId}/trajectories`)
+    : u(`/api/v1/trajectories`);
   const r = await fetch(`${base}?${q}`);
   if (!r.ok) throw new Error(`list failed: ${r.status}`);
   return r.json();
@@ -118,13 +125,13 @@ export interface Batch {
 }
 
 export async function listDatasets(): Promise<Dataset[]> {
-  const r = await fetch("/api/v1/datasets");
+  const r = await fetch(u("/api/v1/datasets"));
   if (!r.ok) throw new Error(`list datasets failed: ${r.status}`);
   return r.json();
 }
 
 export async function createDataset(name: string, description = ""): Promise<Dataset> {
-  const r = await fetch("/api/v1/datasets", {
+  const r = await fetch(u("/api/v1/datasets"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, description }),
@@ -137,7 +144,7 @@ export async function updateDataset(
   id: string,
   fields: { name?: string; description?: string },
 ): Promise<Dataset> {
-  const r = await fetch(`/api/v1/datasets/${id}`, {
+  const r = await fetch(u(`/api/v1/datasets/${id}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(fields),
@@ -147,12 +154,12 @@ export async function updateDataset(
 }
 
 export async function deleteDataset(id: string): Promise<void> {
-  const r = await fetch(`/api/v1/datasets/${id}`, { method: "DELETE" });
+  const r = await fetch(u(`/api/v1/datasets/${id}`), { method: "DELETE" });
   if (!r.ok) throw new Error(`delete dataset failed: ${r.status}`);
 }
 
 export async function listBatches(datasetId: string): Promise<Batch[]> {
-  const r = await fetch(`/api/v1/datasets/${datasetId}/batches`);
+  const r = await fetch(u(`/api/v1/datasets/${datasetId}/batches`));
   if (!r.ok) throw new Error(`list batches failed: ${r.status}`);
   return r.json();
 }
@@ -178,7 +185,7 @@ export interface ExportParams {
 }
 
 export async function createExport(datasetId: string, params: ExportParams): Promise<ExportArtifact> {
-  const r = await fetch("/api/v1/exports", {
+  const r = await fetch(u("/api/v1/exports"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ dataset_id: datasetId, ...params }),
@@ -188,19 +195,19 @@ export async function createExport(datasetId: string, params: ExportParams): Pro
 }
 
 export async function listExports(datasetId: string): Promise<ExportArtifact[]> {
-  const r = await fetch(`/api/v1/datasets/${datasetId}/exports`);
+  const r = await fetch(u(`/api/v1/datasets/${datasetId}/exports`));
   if (!r.ok) throw new Error(`list exports failed: ${r.status}`);
   return r.json();
 }
 
 export async function deleteExport(exportId: string): Promise<void> {
-  const r = await fetch(`/api/v1/exports/${exportId}`, { method: "DELETE" });
+  const r = await fetch(u(`/api/v1/exports/${exportId}`), { method: "DELETE" });
   if (!r.ok) throw new Error(`delete export failed: ${r.status}`);
 }
 
 // ponytail: GET endpoint sets Content-Disposition; let the browser download it.
 export function downloadExportUrl(exportId: string): string {
-  return `/api/v1/exports/${exportId}/download`;
+  return u(`/api/v1/exports/${exportId}/download`);
 }
 
 export interface DatasetStats {
@@ -213,7 +220,7 @@ export interface DatasetStats {
 }
 
 export async function getDatasetStats(datasetId: string): Promise<DatasetStats> {
-  const r = await fetch(`/api/v1/datasets/${datasetId}/stats`);
+  const r = await fetch(u(`/api/v1/datasets/${datasetId}/stats`));
   if (!r.ok) throw new Error(`stats failed: ${r.status}`);
   return r.json();
 }
@@ -223,7 +230,7 @@ export async function getDatasetStats(datasetId: string): Promise<DatasetStats> 
 export async function uploadToDataset(datasetId: string, file: File): Promise<JobInfo> {
   const form = new FormData();
   form.append("file", file);
-  const r = await fetch(`/api/v1/datasets/${datasetId}/upload`, { method: "POST", body: form });
+  const r = await fetch(u(`/api/v1/datasets/${datasetId}/upload`), { method: "POST", body: form });
   if (!r.ok) throw new Error(`upload failed: ${r.status}`);
   return r.json();
 }
@@ -236,7 +243,7 @@ export interface AnnotatorInfo {
 }
 
 export async function listAnnotators(): Promise<AnnotatorInfo[]> {
-  const r = await fetch("/api/v1/annotators");
+  const r = await fetch(u("/api/v1/annotators"));
   if (!r.ok) throw new Error(`list annotators failed: ${r.status}`);
   return r.json();
 }
@@ -254,7 +261,7 @@ export interface JobInfo {
 }
 
 export async function computeMetrics(datasetId?: string): Promise<{ computed: number }> {
-  const r = await fetch("/api/v1/metrics/compute", {
+  const r = await fetch(u("/api/v1/metrics/compute"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(datasetId ? { dataset_id: datasetId } : {}),
@@ -265,7 +272,7 @@ export async function computeMetrics(datasetId?: string): Promise<{ computed: nu
 
 // Background batch semgrep scan of a dataset — returns a job to poll (like annotators).
 export async function scanDataset(datasetId: string): Promise<JobInfo> {
-  const r = await fetch(`/api/v1/datasets/${datasetId}/semgrep`, { method: "POST" });
+  const r = await fetch(u(`/api/v1/datasets/${datasetId}/semgrep`), { method: "POST" });
   if (!r.ok) throw new Error(`scan dataset failed: ${r.status}`);
   return r.json();
 }
@@ -273,7 +280,7 @@ export async function scanDataset(datasetId: string): Promise<JobInfo> {
 export async function createJob(annotatorPath: string, datasetId?: string): Promise<JobInfo> {
   const body: Record<string, string> = { annotator: annotatorPath };
   if (datasetId) body.dataset_id = datasetId;
-  const r = await fetch("/api/v1/jobs", {
+  const r = await fetch(u("/api/v1/jobs"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -283,7 +290,7 @@ export async function createJob(annotatorPath: string, datasetId?: string): Prom
 }
 
 export async function getJob(jobId: string): Promise<JobInfo> {
-  const r = await fetch(`/api/v1/jobs/${jobId}`);
+  const r = await fetch(u(`/api/v1/jobs/${jobId}`));
   if (!r.ok) throw new Error(`get job failed: ${r.status}`);
   return r.json();
 }
@@ -291,13 +298,13 @@ export async function getJob(jobId: string): Promise<JobInfo> {
 // Recent jobs for a dataset — lets the UI recover run status after a tab/browser
 // close, since sessionStorage (the old only home for job_ids) doesn't survive it.
 export async function listDatasetJobs(datasetId: string): Promise<JobInfo[]> {
-  const r = await fetch(`/api/v1/datasets/${datasetId}/jobs`);
+  const r = await fetch(u(`/api/v1/datasets/${datasetId}/jobs`));
   if (!r.ok) throw new Error(`list dataset jobs failed: ${r.status}`);
   return r.json();
 }
 
 export async function getTrajectory(hash: string): Promise<Trajectory> {
-  const r = await fetch(`/api/v1/trajectories/${hash}`);
+  const r = await fetch(u(`/api/v1/trajectories/${hash}`));
   if (!r.ok) throw new Error(`get failed: ${r.status}`);
   return r.json();
 }
@@ -321,7 +328,7 @@ export interface SemgrepResult {
 }
 
 export async function scanSemgrep(hash: string, force = false): Promise<SemgrepResult> {
-  const r = await fetch(`/api/v1/trajectories/${hash}/semgrep${force ? "?force=true" : ""}`,
+  const r = await fetch(u(`/api/v1/trajectories/${hash}/semgrep${force ? "?force=true" : ""}`),
     { method: "POST" });
   if (!r.ok) throw new Error(`semgrep scan failed: ${r.status}`);
   return r.json();
