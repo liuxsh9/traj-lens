@@ -808,7 +808,7 @@ table.list {
 .help-trigger {
   position: fixed;
   top: 16px;
-  right: 18px;
+  right: max(24px, calc((100vw - 1100px) / 2 + 24px));
   z-index: 80;
   display: inline-flex;
   align-items: center;
@@ -937,5 +937,11 @@ table.list {
   .help-body {
     grid-template-columns: 1fr;
     padding: 12px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .help-trigger {
+    right: max(24px, calc((100vw - 1280px) / 2 + 24px));
   }
 }

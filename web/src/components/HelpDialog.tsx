@@ -1,37 +1,37 @@
 import { useEffect, useState } from "react";
 
-export const SCORE_FORMULA_TEXT = "resolved=100, partially_resolved=50, unresolved=0; each pushback subtracts 5 points, capped at half of the base score.";
+export const SCORE_FORMULA_TEXT = "resolved=100，partially_resolved=50，unresolved=0；每次 pushback 扣 5 分，最多扣基础分的一半。";
 
 export const HELP_SECTIONS = [
   {
-    title: "What It Is",
+    title: "系统定位",
     items: [
-      "traj-lens is a trajectory analysis platform for coding agents, covering ingestion, normalization, annotation, metrics, review, and training-data export.",
-      "It keeps two layers of truth: raw bytes for reproducible export, and canonical Items for analysis.",
+      "traj-lens 用来分析 coding-agent 的完整工作轨迹：从原始日志导入，到统一建模、标注、指标计算、审阅和训练数据导出。",
+      "系统保留两层真相：raw bytes 是可追溯的导出真相，canonical Items 是分析真相。",
     ],
   },
   {
-    title: "Key Capabilities",
+    title: "关键能力",
     items: [
-      "Ingest multiple log formats such as OpenAI messages, Codex, and swe_chat, then normalize them into one trajectory model.",
-      "Organize samples by dataset with filtering, sorting, batch annotation, metric refresh, security scanning, and export.",
-      "Inspect each trajectory through turn and step groups, tool calls, code changes, error recovery, pushback, and the final reply.",
+      "导入多来源日志，适配 OpenAI messages、Codex、swe_chat 等格式，并归一化为统一轨迹模型。",
+      "按数据集管理样本，支持筛选、排序、批量标注、指标刷新、安全扫描和导出。",
+      "轨迹详情页提供 turn/step 分组、工具调用、代码变更、错误恢复、pushback 和最终回复的上下文视图。",
     ],
   },
   {
-    title: "Scoring",
+    title: "分数计算",
     items: [
-      `overall_score starts from the resolution base score and subtracts the pushback penalty: ${SCORE_FORMULA_TEXT}`,
-      "resolved means the task was completed, partially_resolved means only part of it was completed, and unresolved means it was not solved.",
-      "pushback counts user corrections or objections during the trajectory. The initial user request is not counted as pushback.",
+      `overall_score 由 resolution 基础分减去 pushback 惩罚得到：${SCORE_FORMULA_TEXT}`,
+      "resolved 表示任务完成，partially_resolved 表示部分完成，unresolved 表示未解决。",
+      "pushback 反映用户中途纠偏或反对的次数，首个用户需求不计入 pushback。",
     ],
   },
   {
-    title: "Annotations & Metrics",
+    title: "标注与指标",
     items: [
-      "Annotators cover resolution, topic, intent, pushback, error_recovery, hard_interruption, change_acceptance, and related review signals.",
-      "Common metrics include turns, steps, tools, pushback_count, error_steps, introduced_findings_count, and overall_score.",
-      "A stale annotation means the result came from an older annotator version. Re-run annotations or compute metrics to refresh the view.",
+      "标注器覆盖 resolution、topic、intent、pushback、error_recovery、hard_interruption、change_acceptance 等维度。",
+      "常用指标包括 turns、steps、tools、pushback_count、error_steps、introduced_findings_count 和 overall_score。",
+      "陈旧标注表示当前结果来自旧版本标注器，可以重跑标注或重新计算指标来刷新视图。",
     ],
   },
 ] as const;
@@ -59,10 +59,10 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
       >
         <div className="help-head">
           <div>
-            <h2 id="help-title">About traj-lens</h2>
-            <p>A quick guide to capabilities, annotations, metrics, and scoring.</p>
+            <h2 id="help-title">理解 traj-lens</h2>
+            <p>系统能力、标注含义和评分逻辑速览</p>
           </div>
-          <button className="help-close" type="button" onClick={onClose} aria-label="Close help">
+          <button className="help-close" type="button" onClick={onClose} aria-label="关闭帮助">
             ×
           </button>
         </div>
