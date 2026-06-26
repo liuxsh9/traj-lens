@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import pathlib
 import shutil
 import sqlite3
 import tempfile
@@ -12,7 +13,8 @@ from typing import Generator
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile
 from starlette.responses import FileResponse
 
-from trajlens.adapters import detect_and_parse
+from trajlens.adapters import ADAPTERS, detect_and_parse
+from trajlens.api.importer import import_jsonl_job
 from trajlens.store import db as dbmod, repo
 from trajlens.api import jobqueue
 
@@ -26,6 +28,38 @@ def _conn(request: Request) -> Generator[sqlite3.Connection, None, None]:
         yield conn
     finally:
         conn.close()
+
+
+# ── Integration: server-side path ingest (auth + path allowlist) ──────
+# Both are opt-in via env vars, so a plain `trajlens serve` is unchanged:
+#   TRAJLENS_INGEST_TOKEN  set → Bearer token required on protected routes
+#   TRAJLENS_INGEST_ROOTS  set → path-ingest allowed only under these roots
+
+def _ingest_roots() -> list[pathlib.Path]:
+    raw = os.environ.get("TRAJLENS_INGEST_ROOTS", "")
+    return [pathlib.Path(p).resolve() for p in raw.split(":") if p.strip()]
+
+
+def require_token(request: Request) -> None:
+    """Bearer-token gate. No token configured → open (back-compat with the
+    current unauthenticated deployment); configured → enforced."""
+    expected = os.environ.get("TRAJLENS_INGEST_TOKEN")
+    if not expected:
+        return
+    if request.headers.get("Authorization") != f"Bearer {expected}":
+        raise HTTPException(status_code=401, detail="invalid or missing token")
+
+
+def safe_resolve(raw_path: str) -> pathlib.Path:
+    """Resolve raw_path and require it to live under an allowed root, blocking
+    `../` traversal. 403 if roots aren't configured or the path escapes them."""
+    roots = _ingest_roots()
+    if not roots:
+        raise HTTPException(status_code=403, detail="path ingest disabled (set TRAJLENS_INGEST_ROOTS)")
+    p = pathlib.Path(raw_path).resolve()
+    if not any(p.is_relative_to(root) for root in roots):
+        raise HTTPException(status_code=403, detail="path outside allowed ingest roots")
+    return p
 
 
 @router.get("/api/health")
@@ -402,74 +436,67 @@ def upload_to_dataset(
     job_id = uuid.uuid4().hex[:12]
     repo.create_job(conn, job_id=job_id, annotator_id="upload")
 
-    COMMIT_EVERY = 200  # ponytail: one transaction per 200 trajectories; tune if I/O-bound
-
-    def _run():
-        bg = dbmod.connect(db_path)
-        batch = None
-        done = skipped = 0
-        errors: list[str] = []
-        hashes: list[str] = []
-        try:
-            with open(tmp_path, encoding="utf-8") as f:
-                for i, line in enumerate(f):
-                    line = line.strip()
-                    if not line:
-                        skipped += 1
-                        continue
-                    try:
-                        obj = json.loads(line)
-                        traj, fmt = detect_and_parse(obj)
-                        if batch is None:
-                            batch = repo.create_batch(bg, dataset_id=dataset_id, format=fmt,
-                                                      name=fname,
-                                                      source_info={"filename": fname, "source": "upload"})
-                        ch = repo.put_trajectory(bg, traj, source_path=fname,
-                                                 raw_bytes=line.encode("utf-8"),
-                                                 blob_dir=blob_dir, batch_id=batch["id"],
-                                                 commit=False)
-                        hashes.append(ch)
-                        done += 1
-                    except Exception as e:  # noqa: BLE001 — one bad line shouldn't kill the batch
-                        errors.append(f"line {i+1}: {e}")
-                    if (done + skipped) % COMMIT_EVERY == 0:
-                        bg.commit()
-                        repo.update_job(bg, job_id, total=i + 1, done=done, skipped=skipped)
-            bg.commit()
-            if batch:
-                repo.update_batch_count(bg, batch["id"], done)
-
-            # Report done as soon as the rows are queryable — same lesson as
-            # 88f1b40 for the annotation runner. On a 3000-line upload the
-            # compute_metrics loop below takes minutes; blocking status="done"
-            # behind it kept the UI poller spinning, and a single timed-out
-            # poll aborted the client loop mid-import (showing a partial count).
-            repo.update_job(bg, job_id, status="done", done=done, skipped=skipped,
-                            errors=json.dumps(errors[:50], ensure_ascii=False))
-
-            # structural metrics (turns/steps/tools) so list columns aren't 0;
-            # annotation-dependent metrics stay None until annotators run. A
-            # metric failure must never un-'done' an import whose data landed.
-            if hashes:
-                from trajlens.metrics import compute_metrics
-                import trajlens.metrics.builtins  # noqa: F401 — ensure registered
-                for ch in hashes:
-                    try:
-                        compute_metrics(bg, ch)
-                    except Exception:  # noqa: BLE001 — metrics self-refresh on staleness
-                        pass
-        except Exception as exc:  # noqa: BLE001 — otherwise job stays 'pending' forever
-            repo.update_job(bg, job_id, status="error",
-                            errors=json.dumps([{"error": str(exc)}], ensure_ascii=False))
-        finally:
-            bg.close()
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-
-    threading.Thread(target=_run, daemon=True).start()
+    # Shared importer owns the temp file and deletes it (cleanup=True).
+    threading.Thread(
+        target=import_jsonl_job,
+        args=(db_path, blob_dir, dataset_id, tmp_path, fname, job_id),
+        kwargs={"cleanup": True}, daemon=True).start()
     return {"job_id": job_id, "annotator_id": "upload", "status": "pending"}
+
+
+@router.post("/api/v1/ingest/path", dependencies=[Depends(require_token)])
+def ingest_path(request: Request, body: dict = Body(...),
+                conn: sqlite3.Connection = Depends(_conn)):
+    """Ingest a JSONL/JSON file that already lives on the server's disk, by path —
+    no upload round-trip. For same-host integrations (e.g. Dataviewer) sharing the
+    data disk: pass the file's absolute path and trajlens reads it directly.
+
+    body: {"path": "/data/.../foo.jsonl", "dataset": "<optional, default=file stem>"}
+    Async like /upload: returns {job_id, dataset_id, dataset_name} — poll
+    GET /api/v1/jobs/{job_id}. Idempotent: re-ingesting the same file is safe
+    (trajectories dedupe by content_hash), so callers can retry freely.
+
+    Guarded by TRAJLENS_INGEST_ROOTS (path allowlist) and, if set,
+    TRAJLENS_INGEST_TOKEN (Bearer auth)."""
+    raw_path = (body.get("path") or "").strip()
+    if not raw_path:
+        raise HTTPException(status_code=422, detail="'path' required")
+    p = safe_resolve(raw_path)
+    if not p.is_file():
+        raise HTTPException(status_code=404, detail="file not found")
+
+    name = (body.get("dataset") or "").strip() or p.stem
+    ds = repo.get_or_create_dataset(conn, name=name)
+
+    job_id = uuid.uuid4().hex[:12]
+    repo.create_job(conn, job_id=job_id, annotator_id="ingest_path", dataset_id=ds["id"])
+
+    # Server file owned by the caller — never delete it (cleanup=False).
+    threading.Thread(
+        target=import_jsonl_job,
+        args=(request.app.state.db_path, request.app.state.blob_dir,
+              ds["id"], str(p), p.name, job_id),
+        kwargs={"cleanup": False}, daemon=True).start()
+    return {"job_id": job_id, "dataset_id": ds["id"], "dataset_name": ds["name"],
+            "status": "pending"}
+
+
+@router.get("/api/v1/integration")
+def integration_info():
+    """Self-describing integration manifest so a caller learns, in one call,
+    whether auth is required, which path roots are allowed, and what formats
+    are supported — no guessing, no trial-and-error."""
+    return {
+        "version": "1",
+        "auth_required": bool(os.environ.get("TRAJLENS_INGEST_TOKEN")),
+        "ingest_roots": [str(r) for r in _ingest_roots()],
+        "formats": list(ADAPTERS.keys()),
+        "endpoints": {
+            "ingest_path": "POST /api/v1/ingest/path",
+            "job_status": "GET /api/v1/jobs/{job_id}",
+            "openapi": "/openapi.json",
+        },
+    }
 
 
 @router.post("/api/v1/exports")
