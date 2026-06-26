@@ -5,6 +5,7 @@ import {
   getListColumnIds,
   getListScoreClass,
   getListSortParams,
+  shouldShowExportSelection,
 } from "../src/components/ListView";
 
 assert.deepEqual(getListSortParams([]), { sortBy: "score", sortDir: "desc" });
@@ -34,3 +35,24 @@ assert.equal(formatListResolution("unresolved"), "unresolved");
 assert.equal(getListAcceptClass("high"), "res-ok");
 assert.equal(getListAcceptClass("medium"), "res-part");
 assert.equal(getListAcceptClass("low"), "res-fail");
+
+assert.equal(shouldShowExportSelection({
+  datasetId: "dataset-1",
+  total: 2,
+  exportMode: false,
+}), false);
+assert.equal(shouldShowExportSelection({
+  datasetId: "dataset-1",
+  total: 2,
+  exportMode: true,
+}), true);
+assert.equal(shouldShowExportSelection({
+  datasetId: undefined,
+  total: 2,
+  exportMode: true,
+}), false);
+assert.equal(shouldShowExportSelection({
+  datasetId: "dataset-1",
+  total: 0,
+  exportMode: true,
+}), false);

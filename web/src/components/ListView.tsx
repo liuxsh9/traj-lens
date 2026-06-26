@@ -54,6 +54,18 @@ export function getListSortParams(sorting: SortingState) {
   };
 }
 
+export function shouldShowExportSelection({
+  datasetId,
+  total,
+  exportMode,
+}: {
+  datasetId?: string;
+  total: number;
+  exportMode: boolean;
+}) {
+  return Boolean(datasetId && total > 0 && exportMode);
+}
+
 const columns = [
   col.accessor((r) => r.annotations?.title ?? "", {
     id: "title",
@@ -172,6 +184,7 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
   // intentional, no persistence (see CLAUDE.md: trim/mask/selection don't touch
   // canonical). Filter change clears it: the matched set just changed.
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [exportMode, setExportMode] = useState(false);
 
   // derive server params from UI state
   const effectiveSorting = sorting.length > 0 ? sorting : defaultSorting;
@@ -204,6 +217,7 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
     setFilterRules(rules);
     setPage(0);
     setExcluded(new Set());  // matched set changed → exclusions no longer meaningful
+    setExportMode(false);
   }, []);
 
   const toggleRow = useCallback((hash: string) => {
@@ -239,6 +253,7 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
   // export = matched set minus un-checked rows. selectedCount is exact across
   // pages: total is the server's filtered count, excluded is the un-check set.
   const selectedCount = Math.max(0, total - excluded.size);
+  const showExportSelection = shouldShowExportSelection({ datasetId, total, exportMode });
 
   // For FilterBar: fetch all rows for enum/tag options (lightweight — only needed for dropdown hints)
   // ponytail: reuse current page data for options; at scale, a dedicated /facets endpoint is better
@@ -260,6 +275,19 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
           excluded={excluded}
           selectedCount={selectedCount}
           onClearExclusions={() => setExcluded(new Set())}
+          exportMode={exportMode}
+          onStart={() => {
+            setExcluded(new Set());
+            setExportMode(true);
+          }}
+          onCancel={() => {
+            setExcluded(new Set());
+            setExportMode(false);
+          }}
+          onExportComplete={() => {
+            setExcluded(new Set());
+            setExportMode(false);
+          }}
         />
       )}
 
@@ -289,7 +317,7 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
-                {datasetId && (
+                {showExportSelection && (
                   <th style={{ width: 28 }}>
                     <input
                       type="checkbox"
@@ -325,7 +353,7 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
           <tbody>
             {table.getRowModel().rows.map((row) => (
               <tr key={row.id} onClick={() => handleRowClick(row.original.content_hash)}>
-                {datasetId && (
+                {showExportSelection && (
                   <td onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
@@ -357,12 +385,26 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
 
 const EXPORT_FORMATS = ["panguml2"];  // ponytail: add as exporters register
 
-function ExportBar({ datasetId, filters, excluded, selectedCount, onClearExclusions }: {
+function ExportBar({
+  datasetId,
+  filters,
+  excluded,
+  selectedCount,
+  onClearExclusions,
+  exportMode,
+  onStart,
+  onCancel,
+  onExportComplete,
+}: {
   datasetId: string;
   filters: { field: string; op: string; value: string }[];
   excluded: Set<string>;
   selectedCount: number;
   onClearExclusions: () => void;
+  exportMode: boolean;
+  onStart: () => void;
+  onCancel: () => void;
+  onExportComplete: () => void;
 }) {
   const [format, setFormat] = useState(EXPORT_FORMATS[0]);
   const [busy, setBusy] = useState(false);
@@ -391,6 +433,7 @@ function ExportBar({ datasetId, filters, excluded, selectedCount, onClearExclusi
         exclude_hashes: excluded.size ? [...excluded] : undefined,
       });
       refetch();
+      onExportComplete();
       window.open(downloadExportUrl(art.id), "_blank");
     } catch (e) {
       setErr(String(e));
@@ -402,18 +445,30 @@ function ExportBar({ datasetId, filters, excluded, selectedCount, onClearExclusi
   return (
     <div className="export-bar">
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <button className="btn btn-sm" onClick={run} disabled={busy || selectedCount === 0}>
-          {busy ? "导出中…" : `导出 ${selectedCount} 条`}
-        </button>
-        <select className="btn btn-sm btn-ghost" value={format}
-          onChange={(e) => setFormat(e.target.value)} disabled={busy}>
-          {EXPORT_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
-        {excluded.size > 0 && (
-          <span className="faint" style={{ fontSize: 11 }}>
-            已取消 {excluded.size} 条 ·
-            <button className="link-btn" onClick={onClearExclusions} style={{ marginLeft: 4 }}>恢复全选</button>
-          </span>
+        {exportMode ? (
+          <>
+            <button className="btn btn-sm active" onClick={run} disabled={busy || selectedCount === 0}>
+              {busy ? "导出中…" : `导出 ${selectedCount} 条`}
+            </button>
+            <select className="btn btn-sm btn-ghost" value={format}
+              onChange={(e) => setFormat(e.target.value)} disabled={busy}>
+              {EXPORT_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
+            </select>
+            <button className="btn btn-sm btn-ghost" onClick={onCancel} disabled={busy}>取消</button>
+            {excluded.size > 0 && (
+              <span className="faint" style={{ fontSize: 11 }}>
+                已取消 {excluded.size} 条 ·
+                <button className="link-btn" onClick={onClearExclusions} style={{ marginLeft: 4 }}>恢复全选</button>
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <button className="btn btn-sm active" onClick={onStart}>创建导出</button>
+            {exports.length > 0 && (
+              <span className="faint" style={{ fontSize: 11 }}>导出历史</span>
+            )}
+          </>
         )}
         {err && <span className="dim" style={{ fontSize: 11, color: "var(--bad)" }}>{err}</span>}
       </div>

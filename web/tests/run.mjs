@@ -9,6 +9,9 @@ await build({
   platform: "node",
   format: "esm",
   outfile,
+  define: {
+    "import.meta.env.BASE_URL": JSON.stringify("/"),
+  },
   logLevel: "silent",
 });
 
