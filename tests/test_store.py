@@ -4,6 +4,7 @@ from tests.conftest import FIXTURES
 from trajlens.store import db as dbmod
 from trajlens.store import repo
 from trajlens.adapters import detect_and_parse
+from trajlens.core.identity import content_hash
 
 
 def test_migrate_creates_tables_and_sets_version(tmp_path):
@@ -188,3 +189,41 @@ def test_query_trajectories_scoped_by_dataset(tmp_path):
     assert r1["total"] == 1
     r2 = repo.query_trajectories(conn, dataset_id=ds2["id"])
     assert r2["total"] == 0
+
+
+def test_query_trajectories_tag_filters_can_match_any(tmp_path):
+    conn = dbmod.connect(str(tmp_path / "t.db")); dbmod.migrate(conn)
+    repo.register_annotator(conn, id="topic", version="v1", config_hash="cfg")
+    raw_bytes = (FIXTURES / "panguml2_weather.json").read_bytes()
+    traj, _ = detect_and_parse(json.loads(raw_bytes))
+
+    hashes = []
+    for idx, tags in enumerate((["前端"], ["后端"], ["前端", "后端"])):
+        t = traj.model_copy(deep=True)
+        t.items[1].content = f"distinct user turn {idx}"
+        t.content_hash = content_hash(t.items, t.tools)
+        h = repo.put_trajectory(conn, t, source_path=f"{idx}.json")
+        repo.link_annotation_target(conn, target_hash=h, content_hash=h, target_type="trajectory", target_idx=0)
+        conn.commit()
+        repo.put_annotation(
+            conn,
+            target_hash=h,
+            annotator_id="topic",
+            annotator_version="v1",
+            value={"tags": tags},
+            inputs_hash="test",
+        )
+        hashes.append(h)
+
+    all_mode = repo.query_trajectories(conn, filters=[
+        {"field": "tags", "op": "∋", "value": "前端", "mode": "all"},
+        {"field": "tags", "op": "∋", "value": "后端", "mode": "all"},
+    ])
+    assert all_mode["total"] == 1
+    assert {item["content_hash"] for item in all_mode["items"]} == {hashes[2]}
+
+    any_mode = repo.query_trajectories(conn, filters=[
+        {"field": "tags", "op": "∋", "value": "前端", "mode": "any"},
+        {"field": "tags", "op": "∋", "value": "后端", "mode": "any"},
+    ])
+    assert any_mode["total"] == 3

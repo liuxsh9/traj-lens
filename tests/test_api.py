@@ -125,6 +125,49 @@ def test_export_respects_filters_and_excludes(tmp_path):
     assert c.delete(f"/api/v1/exports/{art['id']}").status_code == 404
 
 
+def test_export_respects_tag_any_filter_mode(tmp_path):
+    c = _client(tmp_path)
+    ds = c.post("/api/v1/datasets", json={"name": "tag-any"}).json()
+    a = json.loads((FIXTURES / "panguml2_weather.json").read_text())
+    b = json.loads(json.dumps(a))
+    b["messages"][1]["content"] = "another tag any export sample"
+    _upload_and_wait(c, ds["id"], json.dumps(a) + "\n" + json.dumps(b) + "\n")
+
+    from trajlens.store import db as dbmod, repo
+    conn = dbmod.connect(str(tmp_path / "t.db"))
+    repo.register_annotator(conn, id="topic", version="v1", config_hash="test")
+    hashes = [
+        row["content_hash"]
+        for row in c.get(f"/api/v1/datasets/{ds['id']}/trajectories").json()["items"]
+    ]
+    for h, tags in zip(hashes, (["前端"], ["后端"])):
+        repo.link_annotation_target(conn, target_hash=h, content_hash=h, target_type="trajectory", target_idx=0)
+        conn.commit()
+        repo.put_annotation(
+            conn,
+            target_hash=h,
+            annotator_id="topic",
+            annotator_version="v1",
+            value={"tags": tags},
+            inputs_hash="test",
+        )
+    conn.close()
+
+    art = c.post("/api/v1/exports", json={
+        "dataset_id": ds["id"],
+        "format": "panguml2",
+        "filters": [
+            {"field": "tags", "op": "∋", "value": "前端", "mode": "any"},
+            {"field": "tags", "op": "∋", "value": "后端", "mode": "any"},
+        ],
+    }).json()
+
+    assert art["traj_count"] == 2
+    row = next(x for x in c.get(f"/api/v1/datasets/{ds['id']}/exports").json() if x["id"] == art["id"])
+    assert row["config"]["matched"] == 2
+    assert row["config"]["filters"][0]["mode"] == "any"
+
+
 def test_spa_cache_headers(tmp_path):
     """index.html must revalidate (no-cache) so a rebuild never strands the
     browser on a stale bundle; fingerprinted assets cache forever."""

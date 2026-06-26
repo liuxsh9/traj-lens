@@ -213,7 +213,7 @@ export function ListView({ onOpen, datasetId, filterRules: controlledFilterRules
   const effectiveSorting = sorting.length > 0 ? sorting : defaultSorting;
   const { sortBy, sortDir } = getListSortParams(effectiveSorting);
   const apiFilters = useMemo(
-    () => filterRules.map((r) => ({ field: r.field, op: r.op, value: r.value })),
+    () => filterRules.map((r) => ({ field: r.field, op: r.op, value: r.value, mode: r.mode })),
     [filterRules],
   );
 
@@ -438,7 +438,7 @@ function ExportBar({
   onExportComplete,
 }: {
   datasetId: string;
-  filters: { field: string; op: string; value: string }[];
+  filters: { field: string; op: string; value: string; mode?: "all" | "any" }[];
   excluded: Set<string>;
   selectedCount: number;
   onClearExclusions: () => void;

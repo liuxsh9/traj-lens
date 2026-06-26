@@ -9,8 +9,11 @@ import {
 import { ListView } from "./ListView";
 import {
   clearTagFilters,
+  getTagFilterMode,
   hasTagFilter,
   isTagFilter,
+  setTagFilterMode,
+  type TagFilterMode,
   toggleTagFilter,
   type FilterRule,
 } from "./FilterBar";
@@ -48,7 +51,10 @@ function StatsPanel({
 }) {
   const resTotal = Object.values(stats.resolution).reduce((a, b) => a + b, 0) || 1;
   const metricKeys = ["overall_score", "turn_count", "step_count", "tool_count", "pushback_count"];
-  const hasSelectedTags = filterRules.some(isTagFilter);
+  const selectedTagCount = filterRules.filter(isTagFilter).length;
+  const hasSelectedTags = selectedTagCount > 0;
+  const tagFilterMode = getTagFilterMode(filterRules);
+  const setMode = (mode: TagFilterMode) => onFilterRulesChange(setTagFilterMode(filterRules, mode));
 
   return (
     <div className="stats-panel">
@@ -134,14 +140,36 @@ function StatsPanel({
             })}
           </div>
           {hasSelectedTags && (
-            <button
-              type="button"
-              className="chip-x stats-tags-clear"
-              onClick={() => onFilterRulesChange(clearTagFilters(filterRules))}
-              title="清空 tag 筛选"
-            >
-              ×
-            </button>
+            <div className="stats-tags-controls">
+              {selectedTagCount > 1 && (
+                <div className="segmented stats-tag-mode" aria-label="tag 筛选模式">
+                  <button
+                    type="button"
+                    className={tagFilterMode === "all" ? "active" : ""}
+                    onClick={() => setMode("all")}
+                    title="多标签全部命中"
+                  >
+                    与
+                  </button>
+                  <button
+                    type="button"
+                    className={tagFilterMode === "any" ? "active" : ""}
+                    onClick={() => setMode("any")}
+                    title="多标签任一命中"
+                  >
+                    或
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                className="chip-x stats-tags-clear"
+                onClick={() => onFilterRulesChange(clearTagFilters(filterRules))}
+                title="清空 tag 筛选"
+              >
+                ×
+              </button>
+            </div>
           )}
         </div>
       )}

@@ -605,6 +605,7 @@ def query_trajectories(
 
     where_parts: list[str] = []
     params: list = list(cte_params)
+    any_tag_values: list[str] = []
 
     # --- safe column map for filtering/sorting ---
     col_map = {
@@ -627,11 +628,14 @@ def query_trajectories(
             where_parts.append(f"json_extract(ann_acceptance, '$.likelihood') {sql_op} ?")
             params.append(val)
         elif field == "tags":
-            if op == "∋":
+            if op == "∋" and f.get("mode") == "any":
+                any_tag_values.append(val)
+            elif op == "∋":
                 where_parts.append("ann_topic LIKE ?")
+                params.append(f"%{val}%")
             else:
                 where_parts.append("(ann_topic IS NULL OR ann_topic NOT LIKE ?)")
-            params.append(f"%{val}%")
+                params.append(f"%{val}%")
         elif field == "interrupted":
             if val.lower() in ("true", "1", "yes"):
                 where_parts.append("json_extract(ann_interruption, '$.interrupted') = 1")
@@ -640,6 +644,10 @@ def query_trajectories(
         elif field in col_map and op in op_map:
             where_parts.append(f"COALESCE({col_map[field]}, 0) {op_map[op]} ?")
             params.append(int(val))
+
+    if any_tag_values:
+        where_parts.append("(" + " OR ".join(["ann_topic LIKE ?"] * len(any_tag_values)) + ")")
+        params.extend([f"%{val}%" for val in any_tag_values])
 
     where_sql = (" WHERE " + " AND ".join(where_parts)) if where_parts else ""
 

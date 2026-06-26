@@ -86,7 +86,7 @@ export interface ListParams {
   offset?: number;
   sort_by?: string;
   sort_dir?: string;
-  filters?: { field: string; op: string; value: string }[];
+  filters?: { field: string; op: string; value: string; mode?: "all" | "any" }[];
 }
 
 export async function listTrajectories(params: ListParams = {}, datasetId?: string): Promise<PageResult> {
@@ -180,7 +180,7 @@ export interface ExportArtifact {
 
 export interface ExportParams {
   format: string;
-  filters?: { field: string; op: string; value: string }[];
+  filters?: { field: string; op: string; value: string; mode?: "all" | "any" }[];
   exclude_hashes?: string[];
 }
 

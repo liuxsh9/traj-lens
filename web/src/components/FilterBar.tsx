@@ -8,7 +8,10 @@ export interface FilterRule {
   field: string;
   op: string;
   value: string;
+  mode?: "all" | "any";
 }
+
+export type TagFilterMode = NonNullable<FilterRule["mode"]>;
 
 interface FieldDef {
   key: string;
@@ -106,6 +109,14 @@ export function toggleTagFilter(rules: FilterRule[], tag: string): FilterRule[] 
 
 export function clearTagFilters(rules: FilterRule[]): FilterRule[] {
   return rules.filter((rule) => !isTagFilter(rule));
+}
+
+export function getTagFilterMode(rules: FilterRule[]): TagFilterMode {
+  return rules.find(isTagFilter)?.mode ?? "all";
+}
+
+export function setTagFilterMode(rules: FilterRule[], mode: TagFilterMode): FilterRule[] {
+  return rules.map((rule) => isTagFilter(rule) ? { ...rule, mode } : rule);
 }
 
 export function FilterBar({

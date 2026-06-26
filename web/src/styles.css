@@ -794,6 +794,33 @@ table.list {
   flex: 0 0 auto;
   margin-top: 1px;
 }
+.stats-tags-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.segmented button {
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.segmented button.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
 
 /* ── Upload zone ── */
 .upload-zone {
