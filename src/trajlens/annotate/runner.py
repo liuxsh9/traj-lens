@@ -46,7 +46,7 @@ def _has_annotation(conn, target_hash, annotator_id, version) -> bool:
 
 async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
                         content_hashes=None, llm_profiles=None,
-                        job_id=None) -> dict:
+                        job_id=None, force: bool = False) -> dict:
     """Run `annotator_mod` over trajectories per `spec`. Returns {total, done, skipped, errors}.
 
     LLM annotators run concurrently (bounded by the rate limiter in llm_client).
@@ -78,7 +78,7 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
             continue
         for idx, (th, unit, unit_range) in enumerate(enumerate_targets(traj, spec.target)):
             total += 1
-            if _has_annotation(conn, th, spec.id, spec.version):
+            if not force and _has_annotation(conn, th, spec.id, spec.version):
                 skipped += 1
                 continue
             try:

@@ -419,11 +419,11 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
     return () => clearInterval(timer);
   }, [activeJobs, runMetrics]);
 
-  const runAll = async () => {
+  const runAll = async (force = false) => {
     setRunning(true);
     try {
       const results = await Promise.allSettled(
-        annotators.map((a) => createJob(a.path, datasetId))
+        annotators.map((a) => createJob(a.path, datasetId, force))
       );
       const jobs = results
         .filter((r): r is PromiseFulfilledResult<JobInfo> => r.status === "fulfilled")
@@ -450,9 +450,9 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
     }
   };
 
-  const runOne = async (a: AnnotatorInfo) => {
+  const runOne = async (a: AnnotatorInfo, force = false) => {
     try {
-      const job = await createJob(a.path, datasetId);
+      const job = await createJob(a.path, datasetId, force);
       setActiveJobs((prev) => [...prev, job]);
     } catch { /* backend may reject if LLM profile missing */ }
   };
@@ -463,8 +463,16 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
     <div className="annotate-panel">
       <div className="annotate-toolbar">
         <div className="annotate-actions">
-          <button className="btn btn-sm" onClick={runAll} disabled={running || annotators.length === 0}>
+          <button className="btn btn-sm" onClick={() => runAll()} disabled={running || annotators.length === 0}>
             {running ? "Starting…" : "Run all"}
+          </button>
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={() => runAll(true)}
+            disabled={running || annotators.length === 0}
+            title="Re-run annotators even when annotations already exist for the active version"
+          >
+            Force refresh
           </button>
           <button className="btn btn-sm btn-ghost" onClick={runMetrics}
             title="Fill missing & refresh stale metrics (e.g. overall_score) without re-running annotators">
@@ -477,16 +485,25 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
         </div>
         <div className="annotator-buttons" aria-label="Run individual annotators">
           {displayAnnotators.map((a) => (
-            <button
-              key={a.id}
-              className="btn btn-sm btn-ghost annotator-btn"
-              onClick={() => runOne(a)}
-              aria-label={`Run ${formatAnnotatorLabel(a.id)} annotator, ${a.type}, ${formatAnnotatorTarget(a.target)}`}
-              title={`${formatAnnotatorLabel(a.id)} · ${a.type} · ${formatAnnotatorTarget(a.target)}`}
-            >
-              <span>{formatAnnotatorLabel(a.id)}</span>
-              <span className="annotator-meta">{a.type} · {formatAnnotatorTarget(a.target)}</span>
-            </button>
+            <div key={a.id} className="annotator-action">
+              <button
+                className="btn btn-sm btn-ghost annotator-btn"
+                onClick={() => runOne(a)}
+                aria-label={`Run ${formatAnnotatorLabel(a.id)} annotator, ${a.type}, ${formatAnnotatorTarget(a.target)}`}
+                title={`${formatAnnotatorLabel(a.id)} · ${a.type} · ${formatAnnotatorTarget(a.target)}`}
+              >
+                <span>{formatAnnotatorLabel(a.id)}</span>
+                <span className="annotator-meta">{a.type} · {formatAnnotatorTarget(a.target)}</span>
+              </button>
+              <button
+                className="btn btn-sm btn-ghost annotator-force-btn"
+                onClick={() => runOne(a, true)}
+                aria-label={`Force refresh ${formatAnnotatorLabel(a.id)} annotator`}
+                title={`Force refresh ${formatAnnotatorLabel(a.id)} · ignores active-version cache`}
+              >
+                ↻
+              </button>
+            </div>
           ))}
         </div>
       </div>

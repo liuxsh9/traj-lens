@@ -222,6 +222,7 @@ def create_job(request: Request, body: dict = Body(...),
     if not config_path:
         raise HTTPException(status_code=422, detail="'annotator' config path required")
     dataset_id = body.get("dataset_id")
+    force = bool(body.get("force", False))
 
     from trajlens.annotate.runner import load_annotator_config, load_annotator_module, run_annotator
 
@@ -249,7 +250,7 @@ def create_job(request: Request, body: dict = Body(...),
         bg_conn = dbmod.connect(db_path)
         coro = lambda: run_annotator(
             bg_conn, spec, mod, llm_profiles=profiles,
-            content_hashes=content_hashes, job_id=job_id)
+            content_hashes=content_hashes, job_id=job_id, force=force)
         try:
             # LLM lane hands us its persistent loop (keeps the rate limiter's
             # semaphore bound to one loop); CPU lane passes None → fresh loop.

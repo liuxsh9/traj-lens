@@ -283,6 +283,34 @@ def test_job_lifecycle_uses_consistent_job_id_key(tmp_path):
         raise AssertionError("job never finished")
 
 
+def test_create_job_passes_force_to_runner(tmp_path, monkeypatch):
+    c = _client(tmp_path)
+    raw = json.loads((FIXTURES / "panguml2_weather.json").read_text())
+    ds = c.post("/api/v1/datasets", json={"name": "force"}).json()
+    c.post("/api/v1/trajectories", params={"dataset": ds["name"]}, json=raw)
+    seen = {}
+
+    def fake_submit(fn):
+        fn(None)
+        return 0
+
+    async def fake_run_annotator(conn, spec, mod, **kwargs):
+        seen["force"] = kwargs.get("force")
+        return {"total": 0, "done": 0, "skipped": 0, "errors": []}
+
+    monkeypatch.setattr("trajlens.api.routes.jobqueue.submit_cpu", fake_submit)
+    monkeypatch.setattr("trajlens.annotate.runner.run_annotator", fake_run_annotator)
+
+    r = c.post("/api/v1/jobs", json={
+        "annotator": "config/annotators/loop_detect.yaml",
+        "dataset_id": ds["id"],
+        "force": True,
+    })
+
+    assert r.status_code == 200
+    assert seen["force"] is True
+
+
 def test_upload_runs_as_background_job(tmp_path):
     """Upload returns a job_id immediately (never blocks); polling shows the
     streamed JSONL imported line-by-line, with bad lines counted as errors."""

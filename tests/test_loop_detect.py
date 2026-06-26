@@ -105,3 +105,22 @@ async def test_runner_is_cache_aware(tmp_path):
     assert first["done"] > 0
     assert second["done"] == 0           # all cached on the second pass
     assert second["skipped"] == first["total"]
+
+
+async def test_runner_force_refresh_ignores_cache(tmp_path):
+    conn = dbmod.connect(str(tmp_path / "t.db"))
+    dbmod.migrate(conn)
+    raw = json.loads(LONG_RUN.read_text())
+    traj, _ = detect_and_parse(raw)
+    ch = repo.put_trajectory(conn, traj, blob_dir=str(tmp_path / "blobs"))
+
+    spec = runner.load_annotator_config("config/annotators/loop_detect.yaml")
+    mod = runner.load_annotator_module(spec)
+
+    first = await runner.run_annotator(conn, spec, mod, content_hashes=[ch])
+    forced = await runner.run_annotator(conn, spec, mod, content_hashes=[ch], force=True)
+
+    assert first["done"] > 0
+    assert forced["total"] == first["total"]
+    assert forced["done"] == first["done"]
+    assert forced["skipped"] == 0

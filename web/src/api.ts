@@ -277,9 +277,16 @@ export async function scanDataset(datasetId: string): Promise<JobInfo> {
   return r.json();
 }
 
-export async function createJob(annotatorPath: string, datasetId?: string): Promise<JobInfo> {
-  const body: Record<string, string> = { annotator: annotatorPath };
-  if (datasetId) body.dataset_id = datasetId;
+export function buildCreateJobBody(annotatorPath: string, datasetId?: string, force = false) {
+  return {
+    annotator: annotatorPath,
+    ...(datasetId ? { dataset_id: datasetId } : {}),
+    ...(force ? { force: true } : {}),
+  };
+}
+
+export async function createJob(annotatorPath: string, datasetId?: string, force = false): Promise<JobInfo> {
+  const body = buildCreateJobBody(annotatorPath, datasetId, force);
   const r = await fetch(u("/api/v1/jobs"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
