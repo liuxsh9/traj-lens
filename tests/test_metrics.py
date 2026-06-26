@@ -222,19 +222,20 @@ def test_overall_score_dimensions():
     # accept medium / no edits = base only
     assert fn(None, None, _anns(accept="medium")) == 90.0
     assert fn(None, None, _anns()) == 90.0
-    # one unrecovered error → 90 − 15 = 75
-    assert fn(None, None, _anns(errors=[(True, False)])) == 75.0
+    # one unrecovered error → 90 − 10 = 80
+    assert fn(None, None, _anns(errors=[(True, False)])) == 80.0
     # one recovered error → no penalty (rate 0)
     assert fn(None, None, _anns(errors=[(True, True)])) == 90.0
     # fractional penalties are rounded to the nearest integer after scoring
     fractional = fn(None, None, _anns(errors=[(True, False), (True, False), (True, True)]))
-    assert fractional == 80
+    assert fractional == 83
     assert isinstance(fractional, int)
-    # loop OR interruption → 90 − 15 = 75
-    assert fn(None, None, _anns(loop=True)) == 75.0
+    # loop_detect → 90 − 10 = 80
+    assert fn(None, None, _anns(loop=True)) == 80.0
+    # hard_interruption remains its own 15-point penalty.
     assert fn(None, None, _anns(intr=True)) == 75.0
-    # stacked: resolved + accept low + loop + 1 error unrecovered = 90−15−15−15 = 45
-    assert fn(None, None, _anns(accept="low", loop=True, errors=[(True, False)])) == 45.0
+    # stacked: resolved + accept low + loop + 1 error unrecovered = 90-15-10-10 = 55
+    assert fn(None, None, _anns(accept="low", loop=True, errors=[(True, False)])) == 55.0
     # clamps at 0
     assert fn(None, None, _anns(resolution="unresolved", loop=True)) == 0.0
 

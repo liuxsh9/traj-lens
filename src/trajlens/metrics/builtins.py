@@ -10,7 +10,7 @@ from trajlens.core.model import Trajectory
 from trajlens.metrics import register
 
 _VERSION = "2"
-_OVERALL_SCORE_VERSION = "3"
+_OVERALL_SCORE_VERSION = "4"
 
 
 @register("turn_count", _VERSION)
@@ -102,8 +102,9 @@ def overall_score(traj: Trajectory, conn, anns) -> int | None:
       + accept high  : +10   (changes committed/pushed)
       − accept low   : −15   (changes reverted / user rejected)
       − pushback     : −5 each, capped at base×0.5
-      − error unrecovered rate × 15  (sessions with no errors are not penalised)
-      − loop OR hard-interruption: −15
+      − error unrecovered rate × 10  (sessions with no errors are not penalised)
+      − loop_detect: −10
+      − hard-interruption: −15
     Missing dimensions (no edits, no errors) simply don't contribute — they never
     penalise. None when resolution is indeterminate (can't anchor a base).
     """
@@ -139,7 +140,9 @@ def overall_score(traj: Trajectory, conn, anns) -> int | None:
     score -= {"low": 15}.get(accept, 0)           # accept penalty
     score -= min(pb_count * 5, 90 * 0.5)          # pushback, capped at half max base
     if err_steps:
-        score -= (1 - err_recovered / err_steps) * 15   # unrecovered-error rate
-    if loop or interrupted:
+        score -= (1 - err_recovered / err_steps) * 10   # unrecovered-error rate
+    if loop:
+        score -= 10
+    if interrupted:
         score -= 15
     return round(max(0.0, min(100.0, score)))
