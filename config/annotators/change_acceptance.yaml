@@ -1,0 +1,8 @@
+id: change_acceptance
+type: rule
+target: session
+context: whole
+module: trajlens.annotate.rules.change_acceptance
+# bump when signal regexes / scoring change — compute_version hashes this YAML,
+# so a code-only edit needs a version touch to invalidate cached annotations.
+rule_version: 2  # 2: veto ignores git stash/checkout-branch (SWE-agent stash≠revert)

@@ -585,10 +585,12 @@ def query_trajectories(
         MAX(CASE WHEN m.metric_id='success_score' THEN CAST(m.value AS INTEGER) END) AS success_score,
         MAX(CASE WHEN m.metric_id='tool_intensity' THEN m.value END) AS tool_intensity,
         MAX(CASE WHEN m.metric_id='introduced_findings_count' THEN CAST(m.value AS INTEGER) END) AS introduced_findings_count,
-        -- annotations (resolution + topic + hard_interruption)
+        MAX(CASE WHEN m.metric_id='acceptance_likelihood' THEN CAST(m.value AS REAL) END) AS acceptance_likelihood,
+        -- annotations (resolution + topic + hard_interruption + change_acceptance)
         MAX(CASE WHEN a.annotator_id='resolution' THEN a.value END) AS ann_resolution,
         MAX(CASE WHEN a.annotator_id='topic' THEN a.value END) AS ann_topic,
-        MAX(CASE WHEN a.annotator_id='hard_interruption' THEN a.value END) AS ann_interruption
+        MAX(CASE WHEN a.annotator_id='hard_interruption' THEN a.value END) AS ann_interruption,
+        MAX(CASE WHEN a.annotator_id='change_acceptance' THEN a.value END) AS ann_acceptance
       FROM trajectories t
       {ds_join}
       LEFT JOIN metrics m ON m.content_hash = t.content_hash
@@ -596,7 +598,7 @@ def query_trajectories(
         annotation_targets at2
         JOIN annotations a ON a.target_hash = at2.target_hash
         JOIN annotators n ON a.annotator_id = n.id AND a.annotator_version = n.version AND n.active = 1
-      ) ON at2.content_hash = t.content_hash AND a.annotator_id IN ('resolution','topic','hard_interruption')
+      ) ON at2.content_hash = t.content_hash AND a.annotator_id IN ('resolution','topic','hard_interruption','change_acceptance')
       GROUP BY t.content_hash
     )
     """
@@ -609,6 +611,7 @@ def query_trajectories(
         "turns": "turn_count", "steps": "step_count", "tools": "tool_count",
         "pushback_count": "pushback_count", "score": "success_score",
         "security_findings": "introduced_findings_count",
+        "acceptance": "acceptance_likelihood",
         "created_at": "created_at",
     }
     op_map = {"=": "=", "≥": ">=", "≤": "<=", "≠": "!="}
@@ -618,6 +621,10 @@ def query_trajectories(
         if field == "resolution":
             sql_op = "=" if op == "=" else "!="
             where_parts.append(f"json_extract(ann_resolution, '$.resolution') {sql_op} ?")
+            params.append(val)
+        elif field == "acceptance":
+            sql_op = "=" if op == "=" else "!="
+            where_parts.append(f"json_extract(ann_acceptance, '$.likelihood') {sql_op} ?")
             params.append(val)
         elif field == "tags":
             if op == "∋":
@@ -655,6 +662,7 @@ def query_trajectories(
         ann_res = json.loads(r["ann_resolution"]) if r["ann_resolution"] else None
         ann_topic = json.loads(r["ann_topic"]) if r["ann_topic"] else None
         ann_int = json.loads(r["ann_interruption"]) if r["ann_interruption"] else None
+        ann_acc = json.loads(r["ann_acceptance"]) if r["ann_acceptance"] else None
         ti = json.loads(r["tool_intensity"]) if r["tool_intensity"] else None
         summary: dict = {}
         if ann_res:
@@ -665,6 +673,8 @@ def query_trajectories(
             summary["tags"] = ann_topic.get("tags", [])
         if ann_int:
             summary["interrupted"] = ann_int.get("interrupted", False)
+        if ann_acc and not ann_acc.get("no_edits"):
+            summary["acceptance"] = ann_acc.get("likelihood")
         items.append({
             "content_hash": r["content_hash"],
             "items_count": r["items_count"],
@@ -676,6 +686,7 @@ def query_trajectories(
                 "pushback_count": r["pushback_count"] or 0,
                 "success_score": r["success_score"] if r["success_score"] is not None else -1,
                 "introduced_findings_count": r["introduced_findings_count"] if r["introduced_findings_count"] is not None else -1,
+                "acceptance_likelihood": r["acceptance_likelihood"],  # None when no code edited (N/A)
                 **({"error_steps": ti["error_steps"], "recovery_rate": ti["recovery_rate"]} if ti else {}),
             },
             "annotations": summary,

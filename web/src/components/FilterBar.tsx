@@ -20,6 +20,7 @@ interface FieldDef {
 
 const FIELDS: FieldDef[] = [
   { key: "resolution", label: "resolution", type: "enum", ops: ["=", "≠"], options: [] },
+  { key: "acceptance", label: "acceptance", type: "enum", ops: ["=", "≠"], options: ["high", "medium", "low"] },
   { key: "interrupted", label: "interrupted", type: "enum", ops: ["="], options: ["true", "false"] },
   { key: "turns", label: "turns", type: "number", ops: ["≥", "≤", "="] },
   { key: "steps", label: "steps", type: "number", ops: ["≥", "≤", "="] },
@@ -35,6 +36,7 @@ const FIELDS: FieldDef[] = [
 
 function getVal(row: TrajSummary, field: string): unknown {
   if (field === "resolution") return row.annotations?.resolution ?? "";
+  if (field === "acceptance") return row.annotations?.acceptance ?? "";
   if (field === "interrupted") return row.annotations?.interrupted ? "true" : "false";
   if (field === "tags") return row.annotations?.tags ?? [];
   const metricMap: Record<string, string> = {
@@ -167,7 +169,7 @@ export function FilterBar({
 
       {adding && def && (
         <AddRulePopover def={def}
-          enumOptions={def.key === "interrupted" ? ["true", "false"] : enumOptions}
+          enumOptions={def.options && def.options.length ? def.options : enumOptions}
           tagOptions={tagOptions}
           inputRef={inputRef} onCommit={commit} onCancel={() => setAdding(null)} />
       )}

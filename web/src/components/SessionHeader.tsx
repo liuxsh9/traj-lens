@@ -20,6 +20,9 @@ export function SessionHeader({ items, annotations, score, onBack, onExpandAll, 
   let recoveredSteps = 0;
   let interrupted = false;
   let interruptReason = "";
+  let acceptance = "";          // change_acceptance likelihood (empty = no code edited)
+  let acceptSignals: string[] = [];
+  let acceptEdits = 0;
   for (const a of annotations) {
     let v: Record<string, unknown> = {};
     try { v = JSON.parse(a.value); } catch { /* skip */ }
@@ -33,6 +36,11 @@ export function SessionHeader({ items, annotations, score, onBack, onExpandAll, 
     if (a.annotator_id === "hard_interruption" && v.interrupted) {
       interrupted = true;
       interruptReason = (v.reason as string) ?? "";
+    }
+    if (a.annotator_id === "change_acceptance" && !v.no_edits && typeof v.likelihood === "string") {
+      acceptance = v.likelihood;
+      acceptSignals = Array.isArray(v.signals) ? (v.signals as string[]) : [];
+      acceptEdits = typeof v.edit_count === "number" ? v.edit_count : 0;
     }
   }
 
@@ -86,6 +94,13 @@ export function SessionHeader({ items, annotations, score, onBack, onExpandAll, 
         )}
         {interrupted && (
           <span className="chip-sm res-fail" title={interruptReason}>interrupted</span>
+        )}
+        {acceptance && (
+          <span className="chip-sm"
+            style={{ background: acceptance === "high" ? "var(--good)" : acceptance === "low" ? "var(--bad)" : "var(--warn)", color: "#fff" }}
+            title={`代码修改被接受可能性：${acceptance}\n编辑数 ${acceptEdits}` + (acceptSignals.length ? `\n信号：${acceptSignals.join(", ")}` : "\n无 git/测试信号")}>
+            accept {acceptance}
+          </span>
         )}
         {staleIds.size > 0 && (
           <span className="chip-sm" style={{ background: "var(--warn)", color: "#fff" }}

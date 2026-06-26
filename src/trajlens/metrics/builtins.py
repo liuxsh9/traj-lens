@@ -72,6 +72,24 @@ def tool_intensity(traj: Trajectory, conn, anns) -> dict:
     }
 
 
+@register("acceptance_likelihood", _VERSION, depends_on=["change_acceptance"])
+def acceptance_likelihood(traj: Trajectory, conn, anns) -> float | None:
+    """0–100 likelihood that the session's code changes were accepted.
+
+    Mirrors the change_acceptance annotator's `score` (0–1) onto the metrics
+    table so list/filter/sort/export pick it up. None when no code was edited
+    (the dimension is N/A, not a low score).
+    """
+    for a in anns:
+        if a["annotator_id"] != "change_acceptance":
+            continue
+        v = json.loads(a["value"]) if isinstance(a["value"], str) else a["value"]
+        if v.get("no_edits") or v.get("score") is None:
+            return None
+        return round(v["score"] * 100, 1)
+    return None
+
+
 @register("success_score", _VERSION, depends_on=["resolution", "pushback"])
 def success_score(traj: Trajectory, conn, anns) -> float | None:
     """Composite score: resolution baseline − pushback penalty.

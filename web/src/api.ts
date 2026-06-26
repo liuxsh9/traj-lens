@@ -63,6 +63,7 @@ export interface TrajSummary {
     summary?: string;
     tags?: string[];
     interrupted?: boolean;
+    acceptance?: string;  // change_acceptance likelihood: high|medium|low (absent = no code edited)
   };
 }
 

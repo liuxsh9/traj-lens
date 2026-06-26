@@ -117,6 +117,17 @@ const columns = [
     },
     enableSorting: false,
   }),
+  col.accessor((r) => r.annotations?.acceptance ?? "", {
+    id: "acceptance",
+    header: "accept",
+    cell: (c) => {
+      const v = c.getValue();
+      if (!v) return <span className="faint">—</span>;  // no code edited → N/A
+      const color = v === "high" ? "var(--good)" : v === "low" ? "var(--bad)" : "var(--warn)";
+      return <span className="chip-sm" style={{ background: color, color: "#fff" }}>{v}</span>;
+    },
+    enableSorting: false,
+  }),
   col.accessor("created_at", {
     header: "created",
     cell: (c) => <span className="faint">{fmtDate(c.getValue())}</span>,

@@ -91,6 +91,24 @@ def _set_weights(messages: list[dict]) -> list[dict]:
     return messages
 
 
+def _acceptance_meta(conn, content_hash: str) -> dict:
+    """change_acceptance annotation as flat meta_info fields. Empty when the
+    session edited no code (the dimension is N/A — don't pollute the record)."""
+    from trajlens.store import repo
+    for a in repo.get_annotations_for_trajectory(conn, content_hash):
+        if a["annotator_id"] != "change_acceptance":
+            continue
+        v = json.loads(a["value"]) if isinstance(a["value"], str) else a["value"]
+        if v.get("no_edits") or v.get("score") is None:
+            return {}
+        return {
+            "change_acceptance_likelihood": v.get("likelihood"),
+            "change_acceptance_score": v.get("score"),
+            "change_acceptance_signals": v.get("signals", []),
+        }
+    return {}
+
+
 def export_sft(conn, content_hash: str, *, trim_end: int | None = None,
                blob_dir: str = "blobs") -> dict | None:
     """Export one trajectory as panguml2 SFT record.
@@ -102,6 +120,8 @@ def export_sft(conn, content_hash: str, *, trim_end: int | None = None,
     traj = repo.get_trajectory(conn, content_hash)
     if traj is None:
         return None
+
+    acceptance = _acceptance_meta(conn, content_hash)
 
     # Try byte-faithful: load raw blob
     row = conn.execute(
@@ -125,7 +145,8 @@ def export_sft(conn, content_hash: str, *, trim_end: int | None = None,
                             "version": raw.get("version", "2.0.0"),
                             "meta_info": {**raw.get("meta_info", {}),
                                           "traj_lens_content_hash": content_hash,
-                                          "export_mode": "byte_faithful"},
+                                          "export_mode": "byte_faithful",
+                                          **acceptance},
                             "tools": raw.get("tools", []),
                             "messages": _set_weights(msgs),
                         }
@@ -143,7 +164,8 @@ def export_sft(conn, content_hash: str, *, trim_end: int | None = None,
     result = {
         "version": "2.0.0",
         "meta_info": {"traj_lens_content_hash": content_hash,
-                      "export_mode": "converted"},
+                      "export_mode": "converted",
+                      **acceptance},
         "tools": traj.tools,
         "messages": _set_weights(msgs),
     }
