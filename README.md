@@ -1,105 +1,128 @@
 # traj-lens
 
-> Coding Agent 轨迹分析的底座平台：ingest 多样脚手架轨迹 → 统一中间格式 → 规则/LLM 标注 → 指标 → 可视化 → 挖掘/裁剪训练数据。
+Coding Agent 轨迹分析平台。导入 Claude Code、Codex CLI、OpenAI messages、SWE-chat
+等轨迹日志，归一成统一 typed-item 模型，做标注、指标、可视化和训练数据导出。
 
-Claude Code / Codex / OpenCode 等 Coding Agent = **LLM + 脚手架**。traj-lens 把它们运行过程产生的多样轨迹，归一成一套可标注、可度量、可视化、可导出训练数据的中间模型。一句话：**给 Coding Agent 的轨迹做「显微镜 + 数据车间」**。
+当前项目主要面向本地或私有环境部署。已实现：多格式 ingest、规则/LLM 标注、
+内置指标、数据集浏览、单轨迹 viewer、可选 Semgrep 扫描、panguml2 SFT 导出、
+以及同服务器路径直读 ingest 集成。
 
-**当前能力**（端到端可跑）：多格式 ingest · 规则/LLM 标注中间件 · 指标与跨语料浏览 · 单轨迹富 viewer · semgrep 安全扫描 · 挑数据裁剪导出（panguml2 SFT）· 第三方系统集成（按服务器路径直读 ingest）。
+## 快速开始
 
----
-
-## 快速开始（本地 / 私有环境）
+需要 Python 3.12+、`uv`、Node 18+。
 
 ```bash
-# 1. 依赖（需 uv + Python 3.12；前端需 Node 18+）
-uv sync
-cd web && npm install && npm run build && cd ..   # 产出 web/dist，serve 自动托管
+make install
+make build
 
-# 2. 配置（LLM 标注 + 存储路径）
-cp .env.example .env && $EDITOR .env
-
-# 3. 跑起来：导入一条轨迹 → 起服务
-uv run trajlens ingest tests/samples/claude_code/<some>.jsonl
-uv run trajlens serve            # http://127.0.0.1:8000 （API + 前端，单一可部署物）
+uv run trajlens ingest tests/samples/claude_code/cc_small.jsonl
+make serve
 ```
 
-默认只听 `127.0.0.1:8000`。要内网/局域网访问，在 `.env` 设 `TRAJLENS_HOST=0.0.0.0`、按需改 `TRAJLENS_PORT`（命令行 `--host` / `--port` 优先级更高）。
+打开 <http://127.0.0.1:8000>。默认只监听 `127.0.0.1:8000`；需要局域网或服务器访问时：
 
 ```bash
 uv run trajlens serve --host 0.0.0.0 --port 9000
 ```
 
-`serve` 启动时若发现 `web/dist` 比前端源码旧，会自动重建（`--no-build` 跳过）。
+`trajlens serve` 启动时会检查 `web/dist` 是否缺失或落后于前端源码，并自动重建。
+不希望自动构建时可加 `--no-build`。
 
----
+## 可选分析流程
 
-## 文档地图
+基础导入、浏览、指标和导出不需要 LLM key。LLM 标注需要先配置 `.env`：
 
-看完这张表就知道每件事的细节去哪找：
+```bash
+cp .env.example .env
+$EDITOR .env
 
-| 想做什么 | 去哪 |
-|---|---|
-| **了解项目是什么、跑起来** | 本文件（你在这） |
-| **私有环境部署**（离线 / systemd·Docker / 反代 / 备份 / semgrep） | [docs/DEPLOY.md](docs/DEPLOY.md) |
-| **把别的系统接进来**（路径直读 ingest / 鉴权 / 子路径部署 / Dataviewer 案例） | [docs/INTEGRATION.md](docs/INTEGRATION.md) |
-| **设计权威来源**（模型 / 身份 / 分组 / 各章节决策） | [docs/superpowers/specs/2026-06-21-traj-lens-design.md](docs/superpowers/specs/2026-06-21-traj-lens-design.md) |
-| **当前进度 / 未完成项 / 取舍记录** | [docs/TODO.md](docs/TODO.md) |
-| **改代码前必读**（架构约定 / 多 agent 协作 / 提交规范 / 调试 cheatsheet） | [CLAUDE.md](CLAUDE.md) |
-| **完整 API 参考** | 启动后访问 `/docs`（Swagger UI）或 `/openapi.json` |
-| **viewer 设计草图** | [mockups/](mockups/) |
+uv run trajlens annotate config/annotators/resolution.yaml
+uv run trajlens metrics
+uv run trajlens export _default --format panguml2 --output export.jsonl
+```
 
----
+规则标注器不需要 LLM 配置，例如：
 
-## 长什么样
+```bash
+uv run trajlens annotate config/annotators/hard_interruption.yaml
+```
 
-**数据集墙**：每个语料一张卡，轨迹数 / 批次数 / 来源一目了然。
+## 界面
 
-![数据集墙](docs/screenshots/01-dataset-wall.png)
+数据集概览：
 
-**数据集详情**：统计面板（平均分 / resolution 分布 / 各指标 min·avg·max / 标签云 / 引入漏洞数）+ 可排序筛选的轨迹表 + 一键跑标注器 / 算指标 / 安全扫描 / 导出。
+![数据集概览](docs/screenshots/01-dataset-wall.png)
+
+数据集详情：统计、筛选、标注任务、扫描和导出记录。
 
 ![数据集详情](docs/screenshots/02-dataset-detail.png)
 
-**单轨迹 viewer**：左侧 minimap 全局形状，可折叠 run/step 卡显示工具链（`read → bash → replace_all`），pushback 红色高亮，TASK/REPLY bookend，展开即 typed-item 转录。
+单轨迹 viewer：step 分组、工具调用、pushback 高亮和 typed-item 明细。
 
 ![单轨迹 viewer](docs/screenshots/03-trajectory-viewer.png)
 
-## 它做什么
+## 能力范围
 
-- **统一中间格式**：多样输入（CC jsonl / Codex / panguml2 训练数据 / SWE-chat / 自研…）→ 两层内容寻址模型（raw 字节真相 + Items-canonical 分析真相，OpenAI Responses 风格 typed items）+ 出处指针。
-- **标注与分析**：规则/LLM 标注器，session / turn / **step** 级；可靠的 OpenAI 兼容 LLM 中间件（重试 / 限流 / 缓存 / 结构化输出 / 配置化 prompt+profile）。
-- **指标与浏览**：跨语料排序 / 筛选 / 下钻。
-- **可视化**：单轨迹 viewer —— minimap 全局形状 + 可折叠 step 卡 + 展开 typed-item 转录。
-- **训练数据挖掘**：按训练价值选择 + 裁剪（**只裁不改写、保证完整性 R1–R4**）+ 导出（panguml2 SFT / 偏好对），用于 SFT / 退火回流。
+- **导入**：通过 adapter 识别并解析 JSON/JSONL 轨迹。
+- **归一化**：保留 raw bytes 作为导出真相，同时生成 canonical Items 用于分析。
+- **标注**：支持 session、user turn、step 级规则/LLM 标注。
+- **指标**：内置 tool count、turn count、pushback count、success score 等指标。
+- **浏览**：按数据集查看统计、筛选轨迹，并下钻到单条轨迹。
+- **安全扫描**：安装 Semgrep 后可扫描轨迹中的代码变更。
+- **导出**：当前支持选择数据集切片导出为 panguml2 SFT JSONL。
 
-> 验收基准：完整承载 SWE-chat（arXiv:2604.20779）的轨迹分析能力，并具更优扩展性。
+## 架构
 
-## 架构：扩展点 = 四注册表（in/out 对称）
-
-```
-输入 adapters(in) ──► [ annotators · metrics ] ──► 导出 exporters(out)
-```
-
-加输入 / 加标注 / 加指标 / 加导出格式 = 注册一个新函数（LLM 标注器甚至只是一个 yaml），core 不动。这也是接入新轨迹格式的入口——每个 adapter 只需实现 `sniff(raw)->bool` + `parse(raw)->Trajectory`。
-
-```
-config/        # llm_profiles.yaml · annotators/*.yaml
-src/trajlens/  # core · adapters · store · annotate · llm · metrics · export · api · cli
-web/           # Vite + React viewer
-docs/          # 设计 spec（权威）· DEPLOY · INTEGRATION · TODO
-tests/         # 单测 + 真实样本语料（兼容性回归）
+```text
+raw logs -> adapters -> canonical Trajectory/Items
+                         -> annotators
+                         -> metrics
+                         -> viewer / exporters
 ```
 
-## 第三方系统集成（概览）
+主要目录：
 
-让同机系统一键把服务器上的轨迹文件送进来分析，无需「下载再上传」。核心是三个 **opt-in** 能力（不配环境变量则行为与今天完全一致）：
+```text
+config/        LLM profile 和 annotator YAML
+src/trajlens/  core、adapters、store、annotate、metrics、export、api、cli
+web/           Vite + React viewer
+tests/         单测和样例轨迹
+docs/          部署、集成、设计记录和 TODO
+```
 
-- `GET /api/v1/integration` —— 自描述清单，集成方一次拿到契约（鉴权 / 允许根目录 / 支持格式）。
-- `POST /api/v1/ingest/path` —— 传服务器绝对路径，同盘直读、异步入库、按文件名建数据集、幂等可重试、返回 `dataset_id` 供跳转。
-- `TRAJLENS_INGEST_ROOTS`（路径白名单防穿越）+ `TRAJLENS_INGEST_TOKEN`（Bearer 鉴权）。
+新增输入格式时实现 `sniff(raw) -> bool` 和 `parse(raw) -> Trajectory`，并在
+`src/trajlens/adapters/__init__.py` 注册。标注器和导出器也采用小注册表模式。
 
-→ 完整指南、子路径反代部署、Dataviewer 集成案例：**[docs/INTEGRATION.md](docs/INTEGRATION.md)**
+## 第三方集成
 
-## 技术栈
+同服务器系统可以通过绝对路径把轨迹文件交给 traj-lens 导入，避免先下载再上传。
+该能力默认关闭，配置 `TRAJLENS_INGEST_ROOTS` 后启用。
 
-Python 3.12+（uv）· Pydantic v2 · FastAPI · stdlib `sqlite3` · 官方 `openai` SDK · React + Vite + TanStack。单仓库、单可部署物（`trajlens serve` 同时供 API + 托管前端）。
+- `GET /api/v1/integration`：返回集成清单。
+- `POST /api/v1/ingest/path`：异步导入白名单内的服务器路径。
+- `TRAJLENS_INGEST_TOKEN`：为集成接口启用 Bearer 鉴权。
+
+完整契约见 [docs/INTEGRATION.md](docs/INTEGRATION.md)。
+
+## 文档
+
+| 主题 | 位置 |
+|---|---|
+| 私有部署、systemd、Docker、反代、备份 | [docs/DEPLOY.md](docs/DEPLOY.md) |
+| 第三方系统集成 | [docs/INTEGRATION.md](docs/INTEGRATION.md) |
+| 模型和架构设计 | [docs/superpowers/specs/2026-06-21-traj-lens-design.md](docs/superpowers/specs/2026-06-21-traj-lens-design.md) |
+| 当前 TODO 和取舍 | [docs/TODO.md](docs/TODO.md) |
+| 协作和提交约定 | [CLAUDE.md](CLAUDE.md) |
+| API 参考 | 启动后访问 `/docs` 或 `/openapi.json` |
+
+## 开发
+
+```bash
+make help
+make test
+make typecheck
+make build
+```
+
+技术栈：Python 3.12、Pydantic v2、FastAPI、stdlib `sqlite3`、Typer、React、
+Vite、TanStack。
