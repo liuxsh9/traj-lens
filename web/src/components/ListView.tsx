@@ -20,9 +20,17 @@ function fmtDate(iso: string) {
   return iso.slice(5, 16).replace("T", " ");
 }
 
+export function getListScoreClass(v: number) {
+  return v >= 80 ? "res-ok" : v >= 40 ? "res-part" : "res-fail";
+}
+
+export function getListAcceptClass(v: AcceptLikelihood) {
+  return v === "high" ? "res-ok" : v === "low" ? "res-fail" : "res-part";
+}
+
 function ScorePill({ v }: { v: number }) {
   if (v < 0) return <span className="faint">—</span>;
-  const cls = v >= 80 ? "score-good" : v >= 40 ? "score-mid" : "score-bad";
+  const cls = getListScoreClass(v);
   return <span className={`chip-sm ${cls}`}>{v}</span>;
 }
 
@@ -96,9 +104,9 @@ const columns = [
       const d = ACCEPT_DISPLAY[v];
       if (!d) return <span className="faint">—</span>;
       return (
-        <span className="chip-sm" style={{ background: d.color, color: "#fff" }}
+        <span className={`chip-sm ${getListAcceptClass(v)}`}
           title={`修改被用户采纳的可能性：${d.zh}\n${d.hint}`}>
-          {d.icon} {v}
+          {v}
         </span>
       );
     },
