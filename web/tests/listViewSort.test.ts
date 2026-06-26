@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  formatListResolution,
   getListAcceptClass,
   getListColumnIds,
   getListScoreClass,
@@ -25,6 +26,10 @@ assert.deepEqual(getListColumnIds(), [
 assert.equal(getListScoreClass(90), "res-ok");
 assert.equal(getListScoreClass(45), "res-part");
 assert.equal(getListScoreClass(30), "res-fail");
+
+assert.equal(formatListResolution("resolved"), "resolved");
+assert.equal(formatListResolution("partially_resolved"), "partially");
+assert.equal(formatListResolution("unresolved"), "unresolved");
 
 assert.equal(getListAcceptClass("high"), "res-ok");
 assert.equal(getListAcceptClass("medium"), "res-part");

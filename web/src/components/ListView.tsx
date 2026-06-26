@@ -28,6 +28,10 @@ export function getListAcceptClass(v: AcceptLikelihood) {
   return v === "high" ? "res-ok" : v === "low" ? "res-fail" : "res-part";
 }
 
+export function formatListResolution(v: string) {
+  return v === "partially_resolved" ? "partially" : v;
+}
+
 function ScorePill({ v }: { v: number }) {
   if (v < 0) return <span className="faint">—</span>;
   const cls = getListScoreClass(v);
@@ -91,7 +95,7 @@ const columns = [
       const v = c.getValue();
       if (!v) return <span className="faint">—</span>;
       const cls = v === "resolved" ? "res-ok" : v === "unresolved" ? "res-fail" : v === "indeterminate" ? "res-ind" : "res-part";
-      return <span className={`chip-sm ${cls}`}>{v}</span>;
+      return <span className={`chip-sm ${cls}`}>{formatListResolution(v)}</span>;
     },
     enableSorting: false,
   }),
