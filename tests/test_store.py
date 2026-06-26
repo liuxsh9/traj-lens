@@ -264,6 +264,70 @@ def test_query_trajectories_tag_filters_match_exact_tag_members(tmp_path):
     assert {item["content_hash"] for item in found["items"]} == {hashes[0]}
 
 
+def test_query_trajectories_sorts_all_list_columns(tmp_path):
+    conn = dbmod.connect(str(tmp_path / "t.db")); dbmod.migrate(conn)
+    repo.register_annotator(conn, id="topic", version="v1", config_hash="cfg")
+    repo.register_annotator(conn, id="resolution", version="v1", config_hash="cfg")
+    repo.register_annotator(conn, id="change_acceptance", version="v1", config_hash="cfg")
+    raw_bytes = (FIXTURES / "panguml2_weather.json").read_bytes()
+    traj, _ = detect_and_parse(json.loads(raw_bytes))
+
+    hashes = []
+    rows = [
+        {
+            "title": "Alpha", "resolution": "unresolved", "acceptance": "low",
+            "turn_count": 1, "step_count": 2, "tool_count": 3, "pushback_count": 4,
+            "error_steps": 5, "loop_count": 6, "recovery_count": 7,
+            "introduced_findings_count": 8, "overall_score": 9,
+        },
+        {
+            "title": "Zulu", "resolution": "resolved", "acceptance": "high",
+            "turn_count": 9, "step_count": 8, "tool_count": 7, "pushback_count": 6,
+            "error_steps": 1, "loop_count": 4, "recovery_count": 3,
+            "introduced_findings_count": 2, "overall_score": 1,
+        },
+    ]
+    for idx, row in enumerate(rows):
+        t = traj.model_copy(deep=True)
+        t.items[1].content = f"sortable row {idx}"
+        t.content_hash = content_hash(t.items, t.tools)
+        h = repo.put_trajectory(conn, t, source_path=f"sort-{idx}.json")
+        repo.link_annotation_target(conn, target_hash=h, content_hash=h, target_type="trajectory", target_idx=0)
+        conn.commit()
+        repo.put_annotation(conn, target_hash=h, annotator_id="topic", annotator_version="v1",
+                            value={"title": row["title"], "summary": "", "tags": []}, inputs_hash="test")
+        repo.put_annotation(conn, target_hash=h, annotator_id="resolution", annotator_version="v1",
+                            value={"resolution": row["resolution"]}, inputs_hash="test")
+        repo.put_annotation(conn, target_hash=h, annotator_id="change_acceptance", annotator_version="v1",
+                            value={"likelihood": row["acceptance"], "no_edits": False}, inputs_hash="test")
+        repo.put_metric(conn, content_hash=h, metric_id="tool_intensity", value={"error_steps": row["error_steps"], "recovery_rate": None}, version="test")
+        for metric in (
+            "turn_count", "step_count", "tool_count", "pushback_count", "loop_count",
+            "recovery_count", "introduced_findings_count", "overall_score",
+        ):
+            repo.put_metric(conn, content_hash=h, metric_id=metric, value=row[metric], version="test")
+        hashes.append(h)
+
+    expected_desc_first = {
+        "title": hashes[1],
+        "resolution": hashes[1],
+        "acceptance": hashes[1],
+        "turns": hashes[1],
+        "steps": hashes[1],
+        "tools": hashes[1],
+        "pushback_count": hashes[1],
+        "error_steps": hashes[0],
+        "loop_count": hashes[0],
+        "recovery_count": hashes[0],
+        "security_findings": hashes[0],
+        "score": hashes[0],
+        "created_at": hashes[1],
+    }
+    for sort_by, first_hash in expected_desc_first.items():
+        got = repo.query_trajectories(conn, sort_by=sort_by, sort_dir="desc")
+        assert got["items"][0]["content_hash"] == first_hash, sort_by
+
+
 def test_dataset_stats_returns_all_tags(tmp_path):
     conn = dbmod.connect(str(tmp_path / "t.db")); dbmod.migrate(conn)
     ds = repo.create_dataset(conn, name="many-tags")

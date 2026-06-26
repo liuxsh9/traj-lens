@@ -12,6 +12,25 @@ import {
 
 assert.deepEqual(getListSortParams([]), { sortBy: "score", sortDir: "desc" });
 
+assert.deepEqual(
+  Object.fromEntries(getListColumnIds().map((id) => [id, getListSortParams([{ id, desc: true }]).sortBy])),
+  {
+    title: "title",
+    turns: "turns",
+    steps: "steps",
+    tools: "tools",
+    resolution: "resolution",
+    acceptance: "acceptance",
+    pb: "pushback_count",
+    errors: "error_steps",
+    loop: "loop_count",
+    recovery: "recovery_count",
+    sec: "security_findings",
+    score: "score",
+    created_at: "created_at",
+  },
+);
+
 assert.deepEqual(getListColumnIds(), [
   "title",
   "turns",

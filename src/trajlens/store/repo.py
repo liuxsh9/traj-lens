@@ -612,9 +612,19 @@ def query_trajectories(
     # --- safe column map for filtering/sorting ---
     col_map = {
         "turns": "turn_count", "steps": "step_count", "tools": "tool_count",
-        "pushback_count": "pushback_count", "score": "overall_score",
+        "title": "json_extract(ann_topic, '$.title')",
+        "resolution": (
+            "CASE json_extract(ann_resolution, '$.resolution') "
+            "WHEN 'resolved' THEN 3 WHEN 'partially_resolved' THEN 2 "
+            "WHEN 'unresolved' THEN 1 WHEN 'indeterminate' THEN 0 ELSE -1 END"
+        ),
+        "acceptance": (
+            "CASE json_extract(ann_acceptance, '$.likelihood') "
+            "WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END"
+        ),
+        "pushback_count": "pushback_count", "error_steps": "json_extract(tool_intensity, '$.error_steps')",
+        "loop_count": "loop_count", "recovery_count": "recovery_count", "score": "overall_score",
         "security_findings": "introduced_findings_count",
-        "acceptance": "acceptance_likelihood",
         "created_at": "created_at",
     }
     op_map = {"=": "=", "≥": ">=", "≤": "<=", "≠": "!="}

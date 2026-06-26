@@ -40,8 +40,11 @@ function ScorePill({ v }: { v: number }) {
 
 // ponytail: sort_by map — column id → backend field name
 const sortFieldMap: Record<string, string> = {
+  title: "title",
   turns: "turns", steps: "steps", tools: "tools",
-  pb: "pushback_count", score: "score", sec: "security_findings", created_at: "created_at",
+  resolution: "resolution", acceptance: "acceptance",
+  pb: "pushback_count", errors: "error_steps", loop: "loop_count", recovery: "recovery_count",
+  score: "score", sec: "security_findings", created_at: "created_at",
 };
 
 const defaultSorting: SortingState = [{ id: "score", desc: true }];
@@ -107,7 +110,6 @@ const columns = [
         </div>
       );
     },
-    enableSorting: false,
   }),
   col.accessor((r) => r.metrics?.turn_count ?? 0, { id: "turns", header: "turns" }),
   col.accessor((r) => r.metrics?.step_count ?? 0, { id: "steps", header: "steps" }),
@@ -121,7 +123,6 @@ const columns = [
       const cls = v === "resolved" ? "res-ok" : v === "unresolved" ? "res-fail" : v === "indeterminate" ? "res-ind" : "res-part";
       return <span className={`chip-sm ${cls}`}>{formatListResolution(v)}</span>;
     },
-    enableSorting: false,
   }),
   col.accessor((r) => r.annotations?.acceptance ?? "", {
     id: "acceptance",
@@ -138,7 +139,6 @@ const columns = [
         </span>
       );
     },
-    enableSorting: false,
   }),
   col.accessor((r) => r.metrics?.pushback_count ?? 0, {
     id: "pb",
@@ -155,7 +155,6 @@ const columns = [
       const v = c.getValue();
       return v > 0 ? <span style={{ color: "var(--warn)" }}>{v}</span> : <span className="faint">0</span>;
     },
-    enableSorting: false,
   }),
   col.accessor((r) => r.metrics?.loop_count ?? 0, {
     id: "loop",
@@ -164,7 +163,6 @@ const columns = [
       const v = c.getValue();
       return v > 0 ? <span style={{ color: "var(--bad)" }}>{v}</span> : <span className="faint">0</span>;
     },
-    enableSorting: false,
   }),
   col.accessor((r) => r.metrics?.recovery_count ?? 0, {
     id: "recovery",
@@ -173,7 +171,6 @@ const columns = [
       const v = c.getValue();
       return v > 0 ? <span style={{ color: "var(--good)" }}>{v}</span> : <span className="faint">0</span>;
     },
-    enableSorting: false,
   }),
   col.accessor((r) => r.metrics?.introduced_findings_count ?? -1, {
     id: "sec",
