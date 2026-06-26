@@ -5,6 +5,7 @@ import {
   getListColumnIds,
   getListScoreClass,
   getListSortParams,
+  EXPORT_MODE_HINT,
   shouldShowExportSelection,
 } from "../src/components/ListView";
 
@@ -35,6 +36,11 @@ assert.equal(formatListResolution("unresolved"), "unresolved");
 assert.equal(getListAcceptClass("high"), "res-ok");
 assert.equal(getListAcceptClass("medium"), "res-part");
 assert.equal(getListAcceptClass("low"), "res-fail");
+
+assert.equal(
+  EXPORT_MODE_HINT,
+  "基于当前筛选后的样本集创建，进入后可勾选或取消再导出。",
+);
 
 assert.equal(shouldShowExportSelection({
   datasetId: "dataset-1",

@@ -384,6 +384,7 @@ export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; d
 // ── Export bar ──────────────────────────────────────────────────────────
 
 const EXPORT_FORMATS = ["panguml2"];  // ponytail: add as exporters register
+export const EXPORT_MODE_HINT = "基于当前筛选后的样本集创建，进入后可勾选或取消再导出。";
 
 function ExportBar({
   datasetId,
@@ -465,6 +466,7 @@ function ExportBar({
         ) : (
           <>
             <button className="btn btn-sm active" onClick={onStart}>创建导出</button>
+            <span className="faint" style={{ fontSize: 11 }}>{EXPORT_MODE_HINT}</span>
             {exports.length > 0 && (
               <span className="faint" style={{ fontSize: 11 }}>导出历史</span>
             )}
