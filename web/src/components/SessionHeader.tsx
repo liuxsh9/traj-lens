@@ -1,9 +1,10 @@
-import type { Item, Annotation } from "../api";
+import { ACCEPT_DISPLAY, acceptSignalsZh, type AcceptLikelihood,
+  type Item, type Annotation } from "../api";
 
 interface Props {
   items: Item[];
   annotations: Annotation[];
-  score: number | null;  // backend-computed success_score — single source of truth
+  score: number | null;  // backend-computed overall_score — single source of truth
   onBack: () => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
@@ -43,6 +44,9 @@ export function SessionHeader({ items, annotations, score, onBack, onExpandAll, 
       acceptEdits = typeof v.edit_count === "number" ? v.edit_count : 0;
     }
   }
+
+  const acceptDisp = acceptance ? ACCEPT_DISPLAY[acceptance as AcceptLikelihood] : null;
+  const acceptEvidenceZh = acceptSignalsZh(acceptSignals);
 
   const scoreCls = score === null ? "score-na"
     : score >= 80 ? "score-good"
@@ -95,11 +99,16 @@ export function SessionHeader({ items, annotations, score, onBack, onExpandAll, 
         {interrupted && (
           <span className="chip-sm res-fail" title={interruptReason}>interrupted</span>
         )}
-        {acceptance && (
-          <span className="chip-sm"
-            style={{ background: acceptance === "high" ? "var(--good)" : acceptance === "low" ? "var(--bad)" : "var(--warn)", color: "#fff" }}
-            title={`代码修改被接受可能性：${acceptance}\n编辑数 ${acceptEdits}` + (acceptSignals.length ? `\n信号：${acceptSignals.join(", ")}` : "\n无 git/测试信号")}>
-            accept {acceptance}
+        {acceptance && acceptDisp && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span className="chip-sm" style={{ background: acceptDisp.color, color: "#fff" }}>
+              {acceptDisp.icon} 修改采纳可能性: {acceptDisp.zh}
+            </span>
+            <span className="faint" style={{ fontSize: 11 }}>
+              {acceptEvidenceZh.length
+                ? `依据: ${acceptEvidenceZh.join(" · ")} · ${acceptEdits} 处编辑`
+                : `改了 ${acceptEdits} 处，无 git/测试信号`}
+            </span>
           </span>
         )}
         {staleIds.size > 0 && (

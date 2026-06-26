@@ -582,7 +582,7 @@ def query_trajectories(
         MAX(CASE WHEN m.metric_id='step_count' THEN CAST(m.value AS INTEGER) END) AS step_count,
         MAX(CASE WHEN m.metric_id='tool_count' THEN CAST(m.value AS INTEGER) END) AS tool_count,
         MAX(CASE WHEN m.metric_id='pushback_count' THEN CAST(m.value AS INTEGER) END) AS pushback_count,
-        MAX(CASE WHEN m.metric_id='success_score' THEN CAST(m.value AS INTEGER) END) AS success_score,
+        MAX(CASE WHEN m.metric_id='overall_score' THEN CAST(m.value AS REAL) END) AS overall_score,
         MAX(CASE WHEN m.metric_id='tool_intensity' THEN m.value END) AS tool_intensity,
         MAX(CASE WHEN m.metric_id='introduced_findings_count' THEN CAST(m.value AS INTEGER) END) AS introduced_findings_count,
         MAX(CASE WHEN m.metric_id='acceptance_likelihood' THEN CAST(m.value AS REAL) END) AS acceptance_likelihood,
@@ -609,7 +609,7 @@ def query_trajectories(
     # --- safe column map for filtering/sorting ---
     col_map = {
         "turns": "turn_count", "steps": "step_count", "tools": "tool_count",
-        "pushback_count": "pushback_count", "score": "success_score",
+        "pushback_count": "pushback_count", "score": "overall_score",
         "security_findings": "introduced_findings_count",
         "acceptance": "acceptance_likelihood",
         "created_at": "created_at",
@@ -684,7 +684,7 @@ def query_trajectories(
                 "step_count": r["step_count"] or 0,
                 "tool_count": r["tool_count"] or 0,
                 "pushback_count": r["pushback_count"] or 0,
-                "success_score": r["success_score"] if r["success_score"] is not None else -1,
+                "overall_score": r["overall_score"] if r["overall_score"] is not None else -1,
                 "introduced_findings_count": r["introduced_findings_count"] if r["introduced_findings_count"] is not None else -1,
                 "acceptance_likelihood": r["acceptance_likelihood"],  # None when no code edited (N/A)
                 **({"error_steps": ti["error_steps"], "recovery_rate": ti["recovery_rate"]} if ti else {}),

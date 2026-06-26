@@ -149,7 +149,7 @@ export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () =>
         <SessionHeader
           items={traj.items}
           annotations={traj.annotations ?? []}
-          score={traj.metrics?.success_score ?? null}
+          score={traj.metrics?.overall_score ?? null}
           onBack={onBack}
           onExpandAll={onExpandAll}
           onCollapseAll={onCollapseAll}

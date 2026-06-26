@@ -84,14 +84,15 @@ def test_registry_has_builtins():
     assert "step_count" in REGISTRY
     assert "tool_count" in REGISTRY
     assert "pushback_count" in REGISTRY
-    assert "success_score" in REGISTRY
+    assert "overall_score" in REGISTRY
 
 
 def test_registry_depends_on():
     _, _, deps = REGISTRY["pushback_count"]
     assert "pushback" in deps
-    _, _, deps = REGISTRY["success_score"]
+    _, _, deps = REGISTRY["overall_score"]
     assert "resolution" in deps and "pushback" in deps
+    assert "change_acceptance" in deps and "error_recovery" in deps
 
 
 # ── Basic metrics ─────────────────────────────────────────────────────
@@ -107,7 +108,7 @@ def test_compute_basic_metrics(tmp_path):
     assert results["tool_count"] == 3
     assert results["step_count"] >= 1
     assert results["pushback_count"] == 0
-    assert results["success_score"] is None  # no resolution annotation
+    assert results["overall_score"] is None  # no resolution annotation
 
 
 def test_metrics_cached(tmp_path):
@@ -147,47 +148,91 @@ def test_pushback_count_with_annotations(tmp_path):
     assert results["pushback_count"] == 1
 
 
-# ── Success score ─────────────────────────────────────────────────────
+# ── Overall score ─────────────────────────────────────────────────────
+# base = resolution {resolved:90, partially:45, unresolved:0}; missing accept/
+# error/loop dims don't contribute, so with only resolution+pushback the score
+# is base − pushback×5.
 
-def test_success_score_resolved_no_pushback(tmp_path):
+def test_overall_score_resolved_no_pushback(tmp_path):
     conn = _db(tmp_path)
     traj = _make_traj()
     repo.put_trajectory(conn, traj)
     _add_annotations(conn, traj, ["none", "none"], "resolved")
 
     results = compute_metrics(conn, traj.content_hash)
-    assert results["success_score"] == 100
+    assert results["overall_score"] == 90  # base only; no accept → no +10
 
 
-def test_success_score_resolved_with_pushback(tmp_path):
+def test_overall_score_resolved_with_pushback(tmp_path):
     conn = _db(tmp_path)
     traj = _make_traj()
     repo.put_trajectory(conn, traj)
     _add_annotations(conn, traj, ["none", "correction"], "resolved")
 
     results = compute_metrics(conn, traj.content_hash)
-    # 100 base - 5 penalty for 1 pushback = 95
-    assert results["success_score"] == 95
+    assert results["overall_score"] == 85  # 90 − 5 (1 pushback)
 
 
-def test_success_score_unresolved(tmp_path):
+def test_overall_score_unresolved(tmp_path):
     conn = _db(tmp_path)
     traj = _make_traj()
     repo.put_trajectory(conn, traj)
     _add_annotations(conn, traj, ["none", "correction"], "unresolved")
 
     results = compute_metrics(conn, traj.content_hash)
-    assert results["success_score"] == 0
+    assert results["overall_score"] == 0
 
 
-def test_success_score_indeterminate_returns_none(tmp_path):
+def test_overall_score_indeterminate_returns_none(tmp_path):
     conn = _db(tmp_path)
     traj = _make_traj()
     repo.put_trajectory(conn, traj)
     _add_annotations(conn, traj, ["none", "none"], "indeterminate")
 
     results = compute_metrics(conn, traj.content_hash)
-    assert results["success_score"] is None
+    assert results["overall_score"] is None
+
+
+def test_overall_score_dimensions():
+    """accept/error/loop contributions, computed directly on synthetic anns."""
+    from trajlens.metrics import REGISTRY
+    fn = REGISTRY["overall_score"][0]
+
+    def _anns(resolution="resolved", accept=None, errors=(), loop=False, intr=False, pb=0):
+        out = [{"annotator_id": "resolution", "value": {"resolution": resolution}, "target_idx": None}]
+        if accept is not None:
+            out.append({"annotator_id": "change_acceptance",
+                        "value": {"likelihood": accept, "no_edits": False}, "target_idx": None})
+        for i, (has, rec) in enumerate(errors):
+            out.append({"annotator_id": "error_recovery",
+                        "value": {"has_error": has, "recovered": rec}, "target_idx": None})
+        if loop:
+            out.append({"annotator_id": "loop_detect", "value": {"detected": True}, "target_idx": None})
+        if intr:
+            out.append({"annotator_id": "hard_interruption", "value": {"interrupted": True}, "target_idx": None})
+        for i in range(pb):
+            out.append({"annotator_id": "pushback",
+                        "value": {"category": "correction"}, "target_idx": i + 1})
+        return out
+
+    # resolved + accept high = 90 + 10 = 100 (only path to full marks)
+    assert fn(None, None, _anns(accept="high")) == 100.0
+    # resolved + accept low = 90 − 15 = 75
+    assert fn(None, None, _anns(accept="low")) == 75.0
+    # accept medium / no edits = base only
+    assert fn(None, None, _anns(accept="medium")) == 90.0
+    assert fn(None, None, _anns()) == 90.0
+    # one unrecovered error → 90 − 15 = 75
+    assert fn(None, None, _anns(errors=[(True, False)])) == 75.0
+    # one recovered error → no penalty (rate 0)
+    assert fn(None, None, _anns(errors=[(True, True)])) == 90.0
+    # loop OR interruption → 90 − 15 = 75
+    assert fn(None, None, _anns(loop=True)) == 75.0
+    assert fn(None, None, _anns(intr=True)) == 75.0
+    # stacked: resolved + accept low + loop + 1 error unrecovered = 90−15−15−15 = 45
+    assert fn(None, None, _anns(accept="low", loop=True, errors=[(True, False)])) == 45.0
+    # clamps at 0
+    assert fn(None, None, _anns(resolution="unresolved", loop=True)) == 0.0
 
 
 # ── Staleness ─────────────────────────────────────────────────────────
@@ -233,10 +278,10 @@ def test_dependency_invalidation_is_scoped_to_recomputed_dataset(tmp_path):
 
     compute_metrics(conn, traj_a.content_hash)
     compute_metrics(conn, traj_b.content_hash)
-    assert repo.get_dataset_stats(conn, ds_a["id"])["metrics"]["success_score"]["avg"] == 100
+    assert repo.get_dataset_stats(conn, ds_a["id"])["metrics"]["overall_score"]["avg"] == 90
 
     _invalidate_dependent_metrics(conn, "resolution", [traj_b.content_hash])
     _recompute_metrics(conn, [traj_b.content_hash])
 
-    assert repo.get_dataset_stats(conn, ds_a["id"])["metrics"]["success_score"]["avg"] == 100
-    assert repo.get_dataset_stats(conn, ds_b["id"])["metrics"]["success_score"]["avg"] == 45
+    assert repo.get_dataset_stats(conn, ds_a["id"])["metrics"]["overall_score"]["avg"] == 90
+    assert repo.get_dataset_stats(conn, ds_b["id"])["metrics"]["overall_score"]["avg"] == 40

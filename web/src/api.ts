@@ -388,3 +388,28 @@ export function findPushback(annotations: Annotation[]): Map<number, Annotation>
 export function parseAnnotationValue(a: Annotation): Record<string, unknown> {
   try { return JSON.parse(a.value); } catch { return {}; }
 }
+
+// ── change_acceptance display helpers ────────────────────────────────────
+// "修改被用户接受的可能性" — shared by ListView column + SessionHeader badge so
+// the likelihood→中文/icon/color and signal→中文 mappings live in one place.
+
+export type AcceptLikelihood = "high" | "medium" | "low";
+
+export const ACCEPT_DISPLAY: Record<AcceptLikelihood, { zh: string; icon: string; color: string; hint: string }> = {
+  high:   { zh: "高", icon: "✓", color: "var(--good)", hint: "很可能被采纳" },
+  medium: { zh: "中", icon: "~", color: "var(--warn)", hint: "不确定（改了但缺少接受/拒绝信号）" },
+  low:    { zh: "低", icon: "✗", color: "var(--bad)",  hint: "大概率被否决（用户要求回退）" },
+};
+
+const SIGNAL_ZH: Record<string, string> = {
+  git_push: "已推送",
+  git_commit: "已提交",
+  git_add: "已暂存",
+  tests_passed: "测试通过",
+  user_reject: "用户要求回退",
+  git_revert: "git 回退",
+};
+
+export function acceptSignalsZh(signals: string[]): string[] {
+  return (signals ?? []).map((s) => SIGNAL_ZH[s] ?? s);
+}

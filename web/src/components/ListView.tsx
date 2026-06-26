@@ -9,6 +9,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { listTrajectories, createExport, listExports, deleteExport, downloadExportUrl,
+  ACCEPT_DISPLAY, type AcceptLikelihood,
   type TrajSummary, type PageResult, type ExportArtifact } from "../api";
 import { FilterBar, type FilterRule } from "./FilterBar";
 
@@ -92,7 +93,7 @@ const columns = [
     },
     enableSorting: false,
   }),
-  col.accessor((r) => r.metrics?.success_score ?? -1, {
+  col.accessor((r) => r.metrics?.overall_score ?? -1, {
     id: "score",
     header: "score",
     cell: (c) => <ScorePill v={c.getValue()} />,
@@ -121,10 +122,16 @@ const columns = [
     id: "acceptance",
     header: "accept",
     cell: (c) => {
-      const v = c.getValue();
-      if (!v) return <span className="faint">—</span>;  // no code edited → N/A
-      const color = v === "high" ? "var(--good)" : v === "low" ? "var(--bad)" : "var(--warn)";
-      return <span className="chip-sm" style={{ background: color, color: "#fff" }}>{v}</span>;
+      const v = c.getValue() as AcceptLikelihood | "";
+      if (!v) return <span className="faint" title="无代码修改">—</span>;  // N/A
+      const d = ACCEPT_DISPLAY[v];
+      if (!d) return <span className="faint">—</span>;
+      return (
+        <span className="chip-sm" style={{ background: d.color, color: "#fff" }}
+          title={`修改被用户采纳的可能性：${d.zh}\n${d.hint}`}>
+          {d.icon} {v}
+        </span>
+      );
     },
     enableSorting: false,
   }),

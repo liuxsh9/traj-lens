@@ -90,25 +90,55 @@ def acceptance_likelihood(traj: Trajectory, conn, anns) -> float | None:
     return None
 
 
-@register("success_score", _VERSION, depends_on=["resolution", "pushback"])
-def success_score(traj: Trajectory, conn, anns) -> float | None:
-    """Composite score: resolution baseline − pushback penalty.
+@register("overall_score", _VERSION,
+          depends_on=["resolution", "pushback", "change_acceptance",
+                      "error_recovery", "loop_detect", "hard_interruption"])
+def overall_score(traj: Trajectory, conn, anns) -> float | None:
+    """Composite session-quality score over five dimensions.
 
-    resolved=100, partially=50, unresolved=0, indeterminate→None.
-    Each pushback costs 5 points, capped at half the baseline.
+    base = resolution {resolved:90, partially:45, unresolved:0} — leaves 10pt of
+    headroom so only a resolved-AND-accepted session reaches 100.
+      + accept high  : +10   (changes committed/pushed)
+      − accept low   : −15   (changes reverted / user rejected)
+      − pushback     : −5 each, capped at base×0.5
+      − error unrecovered rate × 15  (sessions with no errors are not penalised)
+      − loop OR hard-interruption: −15
+    Missing dimensions (no edits, no errors) simply don't contribute — they never
+    penalise. None when resolution is indeterminate (can't anchor a base).
     """
     resolution = None
     pb_count = 0
+    accept = None                 # high|medium|low|None(no edits)
+    err_steps = err_recovered = 0
+    loop = interrupted = False
+
     for a in anns:
         v = json.loads(a["value"]) if isinstance(a["value"], str) else a["value"]
-        if a["annotator_id"] == "resolution":
+        aid = a["annotator_id"]
+        if aid == "resolution":
             resolution = v.get("resolution")
-        elif a["annotator_id"] == "pushback" and a.get("target_idx") != 0 and v.get("category", "none") != "none":
+        elif aid == "pushback" and a.get("target_idx") != 0 and v.get("category", "none") != "none":
             pb_count += 1
+        elif aid == "change_acceptance" and not v.get("no_edits"):
+            accept = v.get("likelihood")
+        elif aid == "error_recovery" and v.get("has_error"):
+            err_steps += 1
+            if v.get("recovered") is True:
+                err_recovered += 1
+        elif aid == "loop_detect" and v.get("detected"):
+            loop = True
+        elif aid == "hard_interruption" and v.get("interrupted"):
+            interrupted = True
 
     if resolution is None or resolution == "indeterminate":
         return None
 
-    base = {"resolved": 100, "partially_resolved": 50, "unresolved": 0}.get(resolution, 0)
-    penalty = min(pb_count * 5, base * 0.5)
-    return base - penalty
+    score = {"resolved": 90, "partially_resolved": 45, "unresolved": 0}.get(resolution, 0)
+    score += {"high": 10}.get(accept, 0)          # accept bonus (None/medium → 0)
+    score -= {"low": 15}.get(accept, 0)           # accept penalty
+    score -= min(pb_count * 5, 90 * 0.5)          # pushback, capped at half max base
+    if err_steps:
+        score -= (1 - err_recovered / err_steps) * 15   # unrecovered-error rate
+    if loop or interrupted:
+        score -= 15
+    return round(max(0.0, min(100.0, score)), 1)

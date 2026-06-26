@@ -32,7 +32,7 @@ function orderedResolution(resolution: Record<string, number>): [string, number]
 
 function StatsPanel({ stats }: { stats: DatasetStats }) {
   const resTotal = Object.values(stats.resolution).reduce((a, b) => a + b, 0) || 1;
-  const metricKeys = ["success_score", "turn_count", "step_count", "tool_count", "pushback_count"];
+  const metricKeys = ["overall_score", "turn_count", "step_count", "tool_count", "pushback_count"];
 
   return (
     <div className="stats-panel">
@@ -42,7 +42,7 @@ function StatsPanel({ stats }: { stats: DatasetStats }) {
           <div className="dim" style={{ fontSize: 11 }}>trajectories</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.metrics.success_score?.avg ?? "—"}</div>
+          <div className="stat-value">{stats.metrics.overall_score?.avg ?? "—"}</div>
           <div className="dim" style={{ fontSize: 11 }}>avg score</div>
         </div>
         {stats.security && stats.security.scanned > 0 && (
@@ -351,7 +351,7 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
           {running ? "Starting…" : "Run All Annotators"}
         </button>
         <button className="btn btn-sm btn-ghost" onClick={runMetrics}
-          title="Fill missing & refresh stale metrics (e.g. success_score) without re-running annotators">
+          title="Fill missing & refresh stale metrics (e.g. overall_score) without re-running annotators">
           Compute Metrics
         </button>
         <button className="btn btn-sm btn-ghost" onClick={runScan}
