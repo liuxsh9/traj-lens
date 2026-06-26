@@ -631,11 +631,14 @@ def query_trajectories(
             if op == "∋" and f.get("mode") == "any":
                 any_tag_values.append(val)
             elif op == "∋":
-                where_parts.append("ann_topic LIKE ?")
-                params.append(f"%{val}%")
+                where_parts.append("EXISTS (SELECT 1 FROM json_each(ann_topic, '$.tags') WHERE value = ?)")
+                params.append(val)
             else:
-                where_parts.append("(ann_topic IS NULL OR ann_topic NOT LIKE ?)")
-                params.append(f"%{val}%")
+                where_parts.append(
+                    "(ann_topic IS NULL OR NOT EXISTS "
+                    "(SELECT 1 FROM json_each(ann_topic, '$.tags') WHERE value = ?))"
+                )
+                params.append(val)
         elif field == "interrupted":
             if val.lower() in ("true", "1", "yes"):
                 where_parts.append("json_extract(ann_interruption, '$.interrupted') = 1")
@@ -646,8 +649,11 @@ def query_trajectories(
             params.append(int(val))
 
     if any_tag_values:
-        where_parts.append("(" + " OR ".join(["ann_topic LIKE ?"] * len(any_tag_values)) + ")")
-        params.extend([f"%{val}%" for val in any_tag_values])
+        where_parts.append(
+            "EXISTS (SELECT 1 FROM json_each(ann_topic, '$.tags') "
+            "WHERE value IN (" + ", ".join(["?"] * len(any_tag_values)) + "))"
+        )
+        params.extend(any_tag_values)
 
     where_sql = (" WHERE " + " AND ".join(where_parts)) if where_parts else ""
 

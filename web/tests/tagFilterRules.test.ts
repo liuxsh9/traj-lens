@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  applyFilters,
   clearTagFilters,
   makeFilterRule,
   setTagFilterMode,
@@ -56,4 +57,27 @@ assert.deepEqual(
     ["tags", "∋", "前端", "all"],
     ["tags", "∋", "后端", "all"],
   ],
+);
+
+const frontendRows = [
+  {
+    content_hash: "a",
+    items_count: 1,
+    created_at: "",
+    metrics: {},
+    annotations: { tags: ["C#"] },
+  },
+  {
+    content_hash: "b",
+    items_count: 1,
+    created_at: "",
+    metrics: {},
+    annotations: { tags: ["OpenAI"] },
+  },
+];
+
+assert.deepEqual(
+  applyFilters(frontendRows, [{ id: 999, field: "tags", op: "∋", value: "AI" }])
+    .map((row) => row.content_hash),
+  [],
 );

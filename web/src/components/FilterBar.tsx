@@ -69,7 +69,7 @@ function matchRule(row: TrajSummary, r: FilterRule): boolean {
     const arr = v as string[];
     const needle = r.value.toLowerCase();
     if (!needle) return true;
-    const has = arr.some((t) => t.toLowerCase().includes(needle));
+    const has = arr.some((t) => t.toLowerCase() === needle);
     return r.op === "∋" ? has : !has;
   }
   return true;
