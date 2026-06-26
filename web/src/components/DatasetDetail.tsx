@@ -225,6 +225,36 @@ function metricsLabel(m: { status: string; computed?: number }): { text: string;
   return { text: `✓ ${m.computed ?? 0} computed`, color: "var(--good)" };
 }
 
+const ANNOTATOR_ORDER = [
+  "resolution",
+  "change_acceptance",
+  "topic",
+  "intent",
+  "pushback",
+  "error_recovery",
+  "loop_detect",
+  "hard_interruption",
+];
+
+export function formatAnnotatorLabel(id: string): string {
+  const words = id.replace(/[_-]+/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+export function formatAnnotatorTarget(target: string): string {
+  return target.replace(/[_-]+/g, " ");
+}
+
+export function sortAnnotatorsForDisplay(annotators: AnnotatorInfo[]): AnnotatorInfo[] {
+  return [...annotators].sort((a, b) => {
+    const ai = ANNOTATOR_ORDER.indexOf(a.id);
+    const bi = ANNOTATOR_ORDER.indexOf(b.id);
+    const ar = ai === -1 ? ANNOTATOR_ORDER.length : ai;
+    const br = bi === -1 ? ANNOTATOR_ORDER.length : bi;
+    return ar - br || a.id.localeCompare(b.id);
+  });
+}
+
 function AnnotatePanel({ datasetId }: { datasetId: string }) {
   const qc = useQueryClient();
   const { data: annotators = [] } = useQuery({
@@ -344,33 +374,38 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
     } catch { /* backend may reject if LLM profile missing */ }
   };
 
+  const displayAnnotators = sortAnnotatorsForDisplay(annotators);
+
   return (
     <div className="annotate-panel">
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <button className="btn btn-sm" onClick={runAll} disabled={running || annotators.length === 0}>
-          {running ? "Starting…" : "Run All Annotators"}
-        </button>
-        <button className="btn btn-sm btn-ghost" onClick={runMetrics}
-          title="Fill missing & refresh stale metrics (e.g. overall_score) without re-running annotators">
-          Compute Metrics
-        </button>
-        <button className="btn btn-sm btn-ghost" onClick={runScan}
-          title="Semgrep-scan every trajectory's code changes (cached; skips unchanged)">
-          Scan Security
-        </button>
-        {annotators.map((a) => (
-          <button
-            key={a.id}
-            className="btn btn-sm btn-ghost"
-            onClick={() => runOne(a)}
-            title={`${a.type} · target: ${a.target}`}
-          >
-            {a.id}
-            <span className="dim" style={{ marginLeft: 4, fontSize: 10 }}>
-              ({a.type})
-            </span>
+      <div className="annotate-toolbar">
+        <div className="annotate-actions">
+          <button className="btn btn-sm" onClick={runAll} disabled={running || annotators.length === 0}>
+            {running ? "Starting…" : "Run all"}
           </button>
-        ))}
+          <button className="btn btn-sm btn-ghost" onClick={runMetrics}
+            title="Fill missing & refresh stale metrics (e.g. overall_score) without re-running annotators">
+            Compute metrics
+          </button>
+          <button className="btn btn-sm btn-ghost" onClick={runScan}
+            title="Semgrep-scan every trajectory's code changes (cached; skips unchanged)">
+            Scan security
+          </button>
+        </div>
+        <div className="annotator-buttons" aria-label="Run individual annotators">
+          {displayAnnotators.map((a) => (
+            <button
+              key={a.id}
+              className="btn btn-sm btn-ghost annotator-btn"
+              onClick={() => runOne(a)}
+              aria-label={`Run ${formatAnnotatorLabel(a.id)} annotator, ${a.type}, ${formatAnnotatorTarget(a.target)}`}
+              title={`${formatAnnotatorLabel(a.id)} · ${a.type} · ${formatAnnotatorTarget(a.target)}`}
+            >
+              <span>{formatAnnotatorLabel(a.id)}</span>
+              <span className="annotator-meta">{a.type} · {formatAnnotatorTarget(a.target)}</span>
+            </button>
+          ))}
+        </div>
       </div>
       {scanNotice && (
         <div className="dim" style={{ marginTop: 6, fontSize: 11, color: "var(--warn)" }}>
