@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listDatasets, createDataset, updateDataset, deleteDataset, type Dataset } from "../api";
+import { HelpButton } from "./HelpDialog";
 
 export function DatasetWall({ onOpen }: { onOpen: (id: string, name: string) => void }) {
   const qc = useQueryClient();
@@ -58,6 +59,7 @@ export function DatasetWall({ onOpen }: { onOpen: (id: string, name: string) => 
         <button className="btn btn-sm" onClick={() => setCreating(true)}>
           + New Dataset
         </button>
+        <HelpButton />
       </div>
 
       {creating && (

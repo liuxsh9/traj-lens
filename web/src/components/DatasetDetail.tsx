@@ -19,6 +19,7 @@ import {
 } from "./FilterBar";
 import { useSticky } from "../useSticky";
 import { summarizeAnnotatorProgress } from "./annotatorProgress";
+import { HelpButton } from "./HelpDialog";
 
 interface Props {
   datasetId: string;
@@ -591,6 +592,7 @@ export function DatasetDetail({ datasetId, datasetName, onBack, onDatasetChange,
         >
           {showStats ? "▾ Stats" : "▸ Stats"}
         </button>
+        <HelpButton />
       </div>
 
       {showStats && stats && (

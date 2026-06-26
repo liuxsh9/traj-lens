@@ -36,6 +36,8 @@ export const HELP_SECTIONS = [
   },
 ] as const;
 
+export const HELP_BUTTON_CLASS = "btn btn-sm btn-ghost";
+
 function HelpDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -88,14 +90,13 @@ export function HelpButton() {
   return (
     <>
       <button
-        className="btn btn-sm help-trigger"
+        className={HELP_BUTTON_CLASS}
         type="button"
         onClick={() => setOpen(true)}
         title="Open help"
         aria-haspopup="dialog"
       >
-        <span className="help-mark">?</span>
-        <span>Help</span>
+        Help
       </button>
       {open && <HelpDialog onClose={() => setOpen(false)} />}
     </>

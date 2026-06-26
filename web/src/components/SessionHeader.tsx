@@ -1,5 +1,6 @@
 import { ACCEPT_DISPLAY, acceptSignalsZh, type AcceptLikelihood,
   type Item, type Annotation } from "../api";
+import { HelpButton } from "./HelpDialog";
 
 interface Props {
   items: Item[];
@@ -118,6 +119,7 @@ export function SessionHeader({ items, annotations, score, onBack, onExpandAll, 
           </span>
         )}
         <div className="htools">
+          <HelpButton />
           <button className="btn" onClick={onExpandAll}>展开全部</button>
           <button className="btn" onClick={onCollapseAll}>折叠全部</button>
         </div>

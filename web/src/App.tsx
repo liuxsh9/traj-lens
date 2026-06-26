@@ -1,7 +1,6 @@
 import { DatasetWall } from "./components/DatasetWall";
 import { DatasetDetail } from "./components/DatasetDetail";
 import { TrajectoryViewer } from "./components/TrajectoryViewer";
-import { HelpButton } from "./components/HelpDialog";
 import { useSticky } from "./useSticky";
 
 type View =
@@ -14,41 +13,32 @@ export function App() {
 
   if (view.page === "trajectory") {
     return (
-      <>
-        <HelpButton />
-        <TrajectoryViewer
-          hash={view.hash}
-          onBack={() =>
-            view.datasetId
-              ? setView({ page: "dataset", id: view.datasetId, name: view.datasetName || "" })
-              : setView({ page: "datasets" })
-          }
-        />
-      </>
+      <TrajectoryViewer
+        hash={view.hash}
+        onBack={() =>
+          view.datasetId
+            ? setView({ page: "dataset", id: view.datasetId, name: view.datasetName || "" })
+            : setView({ page: "datasets" })
+        }
+      />
     );
   }
   if (view.page === "dataset") {
     return (
-      <>
-        <HelpButton />
-        <DatasetDetail
-          datasetId={view.id}
-          datasetName={view.name}
-          onBack={() => setView({ page: "datasets" })}
-          onDatasetChange={(name) => setView({ page: "dataset", id: view.id, name })}
-          onOpen={(hash) =>
-            setView({ page: "trajectory", hash, datasetId: view.id, datasetName: view.name })
-          }
-        />
-      </>
+      <DatasetDetail
+        datasetId={view.id}
+        datasetName={view.name}
+        onBack={() => setView({ page: "datasets" })}
+        onDatasetChange={(name) => setView({ page: "dataset", id: view.id, name })}
+        onOpen={(hash) =>
+          setView({ page: "trajectory", hash, datasetId: view.id, datasetName: view.name })
+        }
+      />
     );
   }
   return (
-    <>
-      <HelpButton />
-      <DatasetWall
-        onOpen={(id, name) => setView({ page: "dataset", id, name })}
-      />
-    </>
+    <DatasetWall
+      onOpen={(id, name) => setView({ page: "dataset", id, name })}
+    />
   );
 }

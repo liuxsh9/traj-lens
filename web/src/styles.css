@@ -861,38 +861,6 @@ table.list {
 }
 
 /* ── Help dialog ── */
-.help-trigger {
-  position: fixed;
-  top: 16px;
-  right: max(24px, calc((100vw - 1100px) / 2 + 24px));
-  z-index: 80;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--panel);
-  color: var(--accent);
-  border: 1px solid #c2d5ed;
-  white-space: nowrap;
-  box-shadow: 0 2px 10px rgba(26, 34, 51, .08);
-}
-.help-trigger:hover {
-  background: var(--accent-bg);
-  color: var(--accent);
-  opacity: 1;
-}
-.help-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-}
 .help-overlay {
   position: fixed;
   inset: 0;
@@ -979,10 +947,6 @@ table.list {
 }
 
 @media (max-width: 768px) {
-  .help-trigger {
-    top: 10px;
-    right: 10px;
-  }
   .help-overlay {
     align-items: stretch;
     padding: 12px;
@@ -993,11 +957,5 @@ table.list {
   .help-body {
     grid-template-columns: 1fr;
     padding: 12px;
-  }
-}
-
-@media (min-width: 1440px) {
-  .help-trigger {
-    right: max(24px, calc((100vw - 1280px) / 2 + 24px));
   }
 }

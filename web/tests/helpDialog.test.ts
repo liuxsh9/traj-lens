@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { HELP_SECTIONS, SCORE_FORMULA_TEXT } from "../src/components/HelpDialog";
+import { HELP_BUTTON_CLASS, HELP_SECTIONS, SCORE_FORMULA_TEXT } from "../src/components/HelpDialog";
 
 assert.equal(SCORE_FORMULA_TEXT, "resolved=100，partially_resolved=50，unresolved=0；每次 pushback 扣 5 分，最多扣基础分的一半。");
 
@@ -19,3 +19,5 @@ assert.ok(
     item.includes("overall_score")
   ),
 );
+
+assert.equal(HELP_BUTTON_CLASS, "btn btn-sm btn-ghost");
