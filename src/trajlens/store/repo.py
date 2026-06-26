@@ -226,7 +226,17 @@ def list_export_artifacts(conn, dataset_id: str) -> list[dict]:
     rows = conn.execute(
         "SELECT * FROM export_artifacts WHERE dataset_id=? ORDER BY created_at DESC",
         (dataset_id,)).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        # config is stored as JSON text; hand the UI a parsed object so the
+        # history row can render filters + selected/matched without re-parsing.
+        try:
+            d["config"] = json.loads(d.get("config") or "{}")
+        except (json.JSONDecodeError, TypeError):
+            d["config"] = {}
+        out.append(d)
+    return out
 
 
 def get_dataset_stats(conn, dataset_id: str) -> dict:

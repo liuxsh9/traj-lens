@@ -8,7 +8,7 @@ import {
   createColumnHelper,
   type SortingState,
 } from "@tanstack/react-table";
-import { listTrajectories, createExport, listExports, downloadExportUrl,
+import { listTrajectories, createExport, listExports, deleteExport, downloadExportUrl,
   type TrajSummary, type PageResult, type ExportArtifact } from "../api";
 import { FilterBar, type FilterRule } from "./FilterBar";
 
@@ -332,10 +332,19 @@ function ExportBar({ datasetId, filters, excluded, selectedCount, onClearExclusi
   const [format, setFormat] = useState(EXPORT_FORMATS[0]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const { data: exports = [], refetch } = useQuery({
     queryKey: ["exports", datasetId],
     queryFn: () => listExports(datasetId),
   });
+
+  const remove = async (id: string) => {
+    await deleteExport(id);
+    refetch();
+  };
+
+  const COLLAPSE_AT = 3;
+  const shown = showAll ? exports : exports.slice(0, COLLAPSE_AT);
 
   const run = async () => {
     setBusy(true);
@@ -375,14 +384,36 @@ function ExportBar({ datasetId, filters, excluded, selectedCount, onClearExclusi
       </div>
       {exports.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
-          {exports.slice(0, 5).map((x: ExportArtifact) => (
-            <div key={x.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-              <span className="chip-sm">{x.exporter}</span>
-              <span className="faint">{x.traj_count} 条</span>
-              <span className="faint">{x.created_at?.slice(0, 19).replace("T", " ")}</span>
-              <a className="link-btn" href={downloadExportUrl(x.id)} target="_blank" rel="noreferrer">↓ 下载</a>
-            </div>
-          ))}
+          {shown.map((x: ExportArtifact) => {
+            const cfg = x.config ?? {};
+            const flt = cfg.filters ?? [];
+            // Prefer matched as the denominator; full-select reads "5/5" too,
+            // making "filtered then kept all" explicit. Fall back to traj_count
+            // only for pre-config legacy rows.
+            const mat = cfg.matched ?? x.traj_count;
+            const sel = cfg.selected ?? x.traj_count;
+            return (
+              <div key={x.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, flexWrap: "wrap" }}>
+                <span className="chip-sm">{x.exporter}</span>
+                <span className="faint">{sel}/{mat} 条</span>
+                <span className="faint" style={{ fontSize: 11 }}>
+                  {flt.length
+                    ? flt.map((f) => `${f.field}${f.op}${f.value}`).join(" · ")
+                    : "全部（无筛选）"}
+                </span>
+                <span className="faint">{x.created_at?.slice(0, 19).replace("T", " ")}</span>
+                <a className="link-btn" href={downloadExportUrl(x.id)} target="_blank" rel="noreferrer">↓ 下载</a>
+                <button className="link-btn" onClick={() => remove(x.id)}
+                  style={{ color: "var(--bad)" }}>✕ 删除</button>
+              </div>
+            );
+          })}
+          {exports.length > COLLAPSE_AT && (
+            <button className="link-btn" style={{ alignSelf: "flex-start", marginTop: 2 }}
+              onClick={() => setShowAll((s) => !s)}>
+              {showAll ? "收起" : `展开全部 ${exports.length} 条`}
+            </button>
+          )}
         </div>
       )}
     </div>

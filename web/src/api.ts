@@ -163,6 +163,11 @@ export interface ExportArtifact {
   traj_count: number;
   output_path: string;
   created_at: string;
+  config?: {
+    filters?: { field: string; op: string; value: string }[];
+    matched?: number;
+    selected?: number;
+  };
 }
 
 export interface ExportParams {
@@ -185,6 +190,11 @@ export async function listExports(datasetId: string): Promise<ExportArtifact[]> 
   const r = await fetch(`/api/v1/datasets/${datasetId}/exports`);
   if (!r.ok) throw new Error(`list exports failed: ${r.status}`);
   return r.json();
+}
+
+export async function deleteExport(exportId: string): Promise<void> {
+  const r = await fetch(`/api/v1/exports/${exportId}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`delete export failed: ${r.status}`);
 }
 
 // ponytail: GET endpoint sets Content-Disposition; let the browser download it.

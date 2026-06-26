@@ -98,6 +98,22 @@ def test_export_respects_filters_and_excludes(tmp_path):
            for l in dl.splitlines() if l.strip()]
     assert got == [all_hashes[1]]
 
+    # history row self-explains: selected/matched exposes the manual de-selection
+    listed = c.get(f"/api/v1/datasets/{ds['id']}/exports").json()
+    row = next(x for x in listed if x["id"] == art["id"])
+    assert row["config"]["matched"] == 2
+    assert row["config"]["selected"] == 1
+
+    # delete removes the row + the on-disk file
+    import os
+    path = art["output_path"]
+    assert os.path.exists(path)
+    assert c.delete(f"/api/v1/exports/{art['id']}").status_code == 200
+    assert not os.path.exists(path)
+    remaining = [x["id"] for x in c.get(f"/api/v1/datasets/{ds['id']}/exports").json()]
+    assert art["id"] not in remaining
+    assert c.delete(f"/api/v1/exports/{art['id']}").status_code == 404
+
 
 def test_spa_cache_headers(tmp_path):
     """index.html must revalidate (no-cache) so a rebuild never strands the

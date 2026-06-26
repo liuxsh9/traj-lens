@@ -496,15 +496,18 @@ def create_export(request: Request, body: dict = Body(...),
     blob_dir = request.app.state.blob_dir
     # Export set = trajectories matching the list-view filters, minus any the
     # user un-checked. Same query_trajectories path → export matches the list.
-    hashes = [h for h in repo.query_matching_hashes(
-        conn, filters=filters, dataset_id=dataset_id) if h not in exclude]
+    matched = repo.query_matching_hashes(conn, filters=filters, dataset_id=dataset_id)
+    hashes = [h for h in matched if h not in exclude]
 
     # Create the artifact first so its id names the file — unique per export, so
     # concurrent exports never clobber each other (old code wrote a fixed
     # "export.jsonl"). UI omits "output"; CLI may still pass an explicit path.
+    # config records HOW this set was chosen so the history row self-explains:
+    # filters used + selected/matched (e.g. "5/5", or "3/5" with 2 un-checked).
     artifact = repo.create_export_artifact(
         conn, dataset_id=dataset_id, exporter=fmt, traj_count=0,
-        config={"filters": filters or [], "excluded": len(exclude)})
+        config={"filters": filters or [], "matched": len(matched),
+                "selected": len(hashes)})
     out_path = body.get("output") or os.path.join(
         os.path.dirname(blob_dir) or ".", "exports", f"{artifact['id']}.jsonl")
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
@@ -536,6 +539,23 @@ def download_export(export_id: str, conn: sqlite3.Connection = Depends(_conn)):
         raise HTTPException(status_code=410, detail="export file gone — re-export")
     return FileResponse(art["output_path"], media_type="application/x-ndjson",
                         filename=f"{export_id}-{art['exporter']}.jsonl")
+
+
+@router.delete("/api/v1/exports/{export_id}")
+def delete_export(export_id: str, conn: sqlite3.Connection = Depends(_conn)):
+    art = conn.execute(
+        "SELECT output_path FROM export_artifacts WHERE id=?", (export_id,)).fetchone()
+    if art is None:
+        raise HTTPException(status_code=404, detail="export not found")
+    # best-effort unlink the on-disk jsonl, then drop the row
+    if art["output_path"] and os.path.exists(art["output_path"]):
+        try:
+            os.remove(art["output_path"])
+        except OSError:
+            pass
+    conn.execute("DELETE FROM export_artifacts WHERE id=?", (export_id,))
+    conn.commit()
+    return {"deleted": export_id}
 
 
 @router.get("/api/v1/datasets/{dataset_id}/trajectories")
