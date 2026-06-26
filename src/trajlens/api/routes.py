@@ -198,9 +198,9 @@ def scan_dataset(dataset_id: str, request: Request,
                         repo.put_security_scan(bg, content_hash=ch, findings=res["findings"],
                                                scanned=res["scanned"],
                                                ruleset_version=res.get("ruleset_version", cur))
+                        done += 1
                     else:
                         errors.append({"content_hash": ch, "error": res.get("error", "scan failed")})
-                    done += 1
                     repo.update_job(bg, job_id, done=done, skipped=skipped)
             repo.update_job(bg, job_id, status="done", done=done, skipped=skipped,
                             errors=json.dumps(errors, ensure_ascii=False))

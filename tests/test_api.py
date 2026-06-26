@@ -311,6 +311,44 @@ def test_create_job_passes_force_to_runner(tmp_path, monkeypatch):
     assert seen["force"] is True
 
 
+def test_dataset_semgrep_done_counts_new_scans_not_processed(tmp_path, monkeypatch):
+    c = _client(tmp_path)
+    ds = c.post("/api/v1/datasets", json={"name": "semgrep"}).json()
+    obj = json.loads((FIXTURES / "panguml2_weather.json").read_text())
+    changed = json.loads((FIXTURES / "panguml2_weather.json").read_text())
+    changed["messages"][0]["content"] += "\nsecond trajectory"
+    _upload_and_wait(c, ds["id"], "\n".join([json.dumps(obj), json.dumps(changed)]) + "\n")
+    hashes = [t["content_hash"] for t in
+              c.get(f"/api/v1/datasets/{ds['id']}/trajectories").json()["items"]]
+
+    from trajlens.store import db as dbmod, repo
+    conn = dbmod.connect(str(tmp_path / "t.db"))
+    repo.put_security_scan(conn, content_hash=hashes[0], findings=[],
+                           scanned=1, ruleset_version="semgrep-test")
+    conn.close()
+
+    monkeypatch.setattr("trajlens.core.semgrep_scan.semgrep_available", lambda: True)
+    monkeypatch.setattr("trajlens.core.semgrep_scan.ruleset_version", lambda: "semgrep-test")
+    monkeypatch.setattr("trajlens.core.semgrep_scan.scan_changes",
+                        lambda items: {"available": True, "scanned": 1, "findings": [],
+                                       "ruleset_version": "semgrep-test"})
+
+    created = c.post(f"/api/v1/datasets/{ds['id']}/semgrep").json()
+    jid = created["job_id"]
+    for _ in range(50):
+        time.sleep(0.1)
+        job = c.get(f"/api/v1/jobs/{jid}").json()
+        if job["status"] != "pending":
+            break
+    else:
+        raise AssertionError("semgrep job never finished")
+
+    assert job["status"] == "done"
+    assert job["total"] == 2
+    assert job["done"] == 1
+    assert job["skipped"] == 1
+
+
 def test_upload_runs_as_background_job(tmp_path):
     """Upload returns a job_id immediately (never blocks); polling shows the
     streamed JSONL imported line-by-line, with bad lines counted as errors."""
