@@ -76,37 +76,6 @@ const columns = [
   col.accessor((r) => r.metrics?.turn_count ?? 0, { id: "turns", header: "turns" }),
   col.accessor((r) => r.metrics?.step_count ?? 0, { id: "steps", header: "steps" }),
   col.accessor((r) => r.metrics?.tool_count ?? 0, { id: "tools", header: "tools" }),
-  col.accessor((r) => r.metrics?.pushback_count ?? 0, {
-    id: "pb",
-    header: "pb",
-    cell: (c) => {
-      const v = c.getValue();
-      return v > 0 ? <span style={{ color: "var(--warn)" }}>{v}</span> : <span className="faint">0</span>;
-    },
-  }),
-  col.accessor((r) => r.metrics?.error_steps ?? 0, {
-    id: "errors",
-    header: "errs",
-    cell: (c) => {
-      const v = c.getValue();
-      return v > 0 ? <span style={{ color: "var(--warn)" }}>{v}</span> : <span className="faint">0</span>;
-    },
-    enableSorting: false,
-  }),
-  col.accessor((r) => r.metrics?.overall_score ?? -1, {
-    id: "score",
-    header: "score",
-    cell: (c) => <ScorePill v={c.getValue()} />,
-  }),
-  col.accessor((r) => r.metrics?.introduced_findings_count ?? -1, {
-    id: "sec",
-    header: "sec",
-    cell: (c) => {
-      const v = c.getValue();
-      if (v < 0) return <span className="faint">—</span>;        // never scanned
-      return v > 0 ? <span style={{ color: "var(--bad)" }}>{v}</span> : <span className="faint">0</span>;
-    },
-  }),
   col.accessor((r) => r.annotations?.resolution ?? "", {
     id: "resolution",
     header: "resolution",
@@ -135,11 +104,47 @@ const columns = [
     },
     enableSorting: false,
   }),
+  col.accessor((r) => r.metrics?.pushback_count ?? 0, {
+    id: "pb",
+    header: "pb",
+    cell: (c) => {
+      const v = c.getValue();
+      return v > 0 ? <span style={{ color: "var(--warn)" }}>{v}</span> : <span className="faint">0</span>;
+    },
+  }),
+  col.accessor((r) => r.metrics?.error_steps ?? 0, {
+    id: "errors",
+    header: "errs",
+    cell: (c) => {
+      const v = c.getValue();
+      return v > 0 ? <span style={{ color: "var(--warn)" }}>{v}</span> : <span className="faint">0</span>;
+    },
+    enableSorting: false,
+  }),
+  col.accessor((r) => r.metrics?.introduced_findings_count ?? -1, {
+    id: "sec",
+    header: "sec",
+    cell: (c) => {
+      const v = c.getValue();
+      if (v < 0) return <span className="faint">—</span>;        // never scanned
+      return v > 0 ? <span style={{ color: "var(--bad)" }}>{v}</span> : <span className="faint">0</span>;
+    },
+  }),
+  col.accessor((r) => r.metrics?.overall_score ?? -1, {
+    id: "score",
+    header: "score",
+    cell: (c) => <ScorePill v={c.getValue()} />,
+  }),
   col.accessor("created_at", {
+    id: "created_at",
     header: "created",
     cell: (c) => <span className="faint">{fmtDate(c.getValue())}</span>,
   }),
 ];
+
+export function getListColumnIds() {
+  return columns.map((column) => column.id);
+}
 
 export function ListView({ onOpen, datasetId }: { onOpen: (h: string) => void; datasetId?: string }) {
   // persist list UI state per dataset so it survives opening a sample (which
