@@ -10,6 +10,7 @@ from trajlens.core.model import Trajectory
 from trajlens.metrics import register
 
 _VERSION = "2"
+_OVERALL_SCORE_VERSION = "3"
 
 
 @register("turn_count", _VERSION)
@@ -90,10 +91,10 @@ def acceptance_likelihood(traj: Trajectory, conn, anns) -> float | None:
     return None
 
 
-@register("overall_score", _VERSION,
+@register("overall_score", _OVERALL_SCORE_VERSION,
           depends_on=["resolution", "pushback", "change_acceptance",
                       "error_recovery", "loop_detect", "hard_interruption"])
-def overall_score(traj: Trajectory, conn, anns) -> float | None:
+def overall_score(traj: Trajectory, conn, anns) -> int | None:
     """Composite session-quality score over five dimensions.
 
     base = resolution {resolved:90, partially:45, unresolved:0} — leaves 10pt of
@@ -141,4 +142,4 @@ def overall_score(traj: Trajectory, conn, anns) -> float | None:
         score -= (1 - err_recovered / err_steps) * 15   # unrecovered-error rate
     if loop or interrupted:
         score -= 15
-    return round(max(0.0, min(100.0, score)), 1)
+    return round(max(0.0, min(100.0, score)))

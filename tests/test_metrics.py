@@ -226,6 +226,10 @@ def test_overall_score_dimensions():
     assert fn(None, None, _anns(errors=[(True, False)])) == 75.0
     # one recovered error → no penalty (rate 0)
     assert fn(None, None, _anns(errors=[(True, True)])) == 90.0
+    # fractional penalties are rounded to the nearest integer after scoring
+    fractional = fn(None, None, _anns(errors=[(True, False), (True, False), (True, True)]))
+    assert fractional == 80
+    assert isinstance(fractional, int)
     # loop OR interruption → 90 − 15 = 75
     assert fn(None, None, _anns(loop=True)) == 75.0
     assert fn(None, None, _anns(intr=True)) == 75.0
