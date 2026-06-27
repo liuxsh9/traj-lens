@@ -57,7 +57,7 @@ export function formatJobLabel(job: JobInfo): { text: string; color: string } {
     }
     if (!job.total) return { text: "preparing targets…", color: "var(--warn)" };
     const finished = (job.done ?? 0) + (job.skipped ?? 0);
-    return { text: `calling LLM… ${finished}/${job.total}`, color: "var(--warn)" };
+    return { text: `processing targets… ${finished}/${job.total}`, color: "var(--warn)" };
   }
   const done = job.done ?? 0, skipped = job.skipped ?? 0, errs = jobErrCount(job);
   const parts: string[] = [];

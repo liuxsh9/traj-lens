@@ -69,6 +69,7 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
 
     total = done = skipped = 0
     errors: list[dict] = []
+    rule_progress_interval = 50
 
     # Phase 1: enumerate all work items, do cache check + DB linking (serial, fast)
     pending: list[tuple[str, str, list, list, str]] = []  # (ch, th, unit, messages_or_ctx, ih)
@@ -96,6 +97,8 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
                         conn, target_hash=th, annotator_id=spec.id,
                         annotator_version=spec.version, value=value, inputs_hash=ih)
                     done += 1
+                    if job_id and total % rule_progress_interval == 0:
+                        repo.update_job(conn, job_id, total=total, done=done, skipped=skipped)
                 else:
                     messages = annotator_mod.build(unit, ctx)
                     pending.append((ch, th, unit, messages, ih))

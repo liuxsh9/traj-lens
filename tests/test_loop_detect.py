@@ -89,6 +89,34 @@ async def test_runner_e2e_on_sample(tmp_path):
     assert job["done"] == n_steps
 
 
+async def test_rule_runner_publishes_progress_before_done(tmp_path, monkeypatch):
+    conn = dbmod.connect(str(tmp_path / "t.db"))
+    dbmod.migrate(conn)
+
+    raw = json.loads(LONG_RUN.read_text())
+    traj, _ = detect_and_parse(raw)
+    ch = repo.put_trajectory(conn, traj, blob_dir=str(tmp_path / "blobs"))
+
+    seen: list[dict] = []
+    real_update = repo.update_job
+
+    def spy_update_job(conn_arg, job_id, **kwargs):
+        seen.append(kwargs)
+        return real_update(conn_arg, job_id, **kwargs)
+
+    monkeypatch.setattr(repo, "update_job", spy_update_job)
+
+    spec = runner.load_annotator_config("config/annotators/loop_detect.yaml")
+    mod = runner.load_annotator_module(spec)
+    await runner.run_annotator(conn, spec, mod, content_hashes=[ch], job_id="job-progress")
+
+    progress = [
+        kwargs for kwargs in seen
+        if kwargs.get("done", 0) > 0 and kwargs.get("status") != "done"
+    ]
+    assert progress, "rule jobs should publish progress before the final done update"
+
+
 async def test_runner_is_cache_aware(tmp_path):
     conn = dbmod.connect(str(tmp_path / "t.db"))
     dbmod.migrate(conn)

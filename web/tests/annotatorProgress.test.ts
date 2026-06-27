@@ -75,7 +75,7 @@ assert.deepEqual(formatJobLabel(job({ status: "pending" })), {
 });
 
 assert.deepEqual(formatJobLabel(job({ status: "pending", total: 100, done: 25, skipped: 10 })), {
-  text: "calling LLM… 35/100",
+  text: "processing targets… 35/100",
   color: "var(--warn)",
 });
 
