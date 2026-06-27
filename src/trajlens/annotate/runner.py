@@ -73,12 +73,16 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
 
     # Phase 1: enumerate all work items, do cache check + DB linking (serial, fast)
     pending: list[tuple[str, str, list, list, str]] = []  # (ch, th, unit, messages_or_ctx, ih)
+    rule_targets: list[tuple[str, list, str, list, tuple[int, int], int]] = []
     for ch in content_hashes:
         traj = repo.get_trajectory(conn, ch)
         if traj is None:
             continue
         for idx, (th, unit, unit_range) in enumerate(enumerate_targets(traj, spec.target)):
             total += 1
+            if spec.type == "rule":
+                rule_targets.append((ch, traj.items, th, unit, unit_range, idx))
+                continue
             if not force and _has_annotation(conn, th, spec.id, spec.version):
                 skipped += 1
                 continue
@@ -90,18 +94,8 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
                     target_type=spec.target.value, target_idx=idx)
                 conn.commit()
 
-                if spec.type == "rule":
-                    # rules are CPU-only, run inline
-                    value = annotator_mod.annotate(unit, ctx)
-                    repo.put_annotation(
-                        conn, target_hash=th, annotator_id=spec.id,
-                        annotator_version=spec.version, value=value, inputs_hash=ih)
-                    done += 1
-                    if job_id and total % rule_progress_interval == 0:
-                        repo.update_job(conn, job_id, total=total, done=done, skipped=skipped)
-                else:
-                    messages = annotator_mod.build(unit, ctx)
-                    pending.append((ch, th, unit, messages, ih))
+                messages = annotator_mod.build(unit, ctx)
+                pending.append((ch, th, unit, messages, ih))
             except Exception as exc:  # noqa: BLE001
                 log.exception("annotator %s failed on target %s", spec.id, th)
                 errors.append({"content_hash": ch, "target_hash": th, "error": str(exc)})
@@ -110,6 +104,32 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
     # shows "running… 0/86" instead of "running…" with no total.
     if job_id:
         repo.update_job(conn, job_id, total=total, skipped=skipped)
+
+    if spec.type == "rule":
+        for ch, items, th, unit, unit_range, idx in rule_targets:
+            if not force and _has_annotation(conn, th, spec.id, spec.version):
+                skipped += 1
+                if job_id and (done + skipped) % rule_progress_interval == 0:
+                    repo.update_job(conn, job_id, total=total, done=done, skipped=skipped)
+                continue
+            try:
+                ctx = project_context(items, unit_range, spec.context)
+                ih = compute_inputs_hash(unit, ctx)
+                repo.link_annotation_target(
+                    conn, target_hash=th, content_hash=ch,
+                    target_type=spec.target.value, target_idx=idx)
+                conn.commit()
+
+                value = annotator_mod.annotate(unit, ctx)
+                repo.put_annotation(
+                    conn, target_hash=th, annotator_id=spec.id,
+                    annotator_version=spec.version, value=value, inputs_hash=ih)
+                done += 1
+            except Exception as exc:  # noqa: BLE001
+                log.exception("annotator %s failed on target %s", spec.id, th)
+                errors.append({"content_hash": ch, "target_hash": th, "error": str(exc)})
+            if job_id and (done + skipped) % rule_progress_interval == 0:
+                repo.update_job(conn, job_id, total=total, done=done, skipped=skipped)
 
     # Phase 2: fire LLM calls concurrently; process each as it completes so the
     # job's `done` count tracks real progress (the wait is in the LLM calls, not

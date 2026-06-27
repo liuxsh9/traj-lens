@@ -110,11 +110,13 @@ async def test_rule_runner_publishes_progress_before_done(tmp_path, monkeypatch)
     mod = runner.load_annotator_module(spec)
     await runner.run_annotator(conn, spec, mod, content_hashes=[ch], job_id="job-progress")
 
+    final = next(kwargs for kwargs in reversed(seen) if kwargs.get("status") == "done")
     progress = [
         kwargs for kwargs in seen
         if kwargs.get("done", 0) > 0 and kwargs.get("status") != "done"
     ]
     assert progress, "rule jobs should publish progress before the final done update"
+    assert all(kwargs["total"] == final["total"] for kwargs in progress)
 
 
 async def test_runner_is_cache_aware(tmp_path):
