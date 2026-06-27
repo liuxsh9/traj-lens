@@ -56,6 +56,10 @@ def _summarize(it: Item, max_chars: int = 150) -> str:
     return ""
 
 
+_COMPLETION_TOOL_NAMES = {
+    "finish", "final", "complete", "completed", "done", "submit", "report_success",
+    "task_complete", "attempt_completion",
+}
 _FINAL_DETAIL_HEADER = "Last assistant reasoning/message detail:\n"
 _OLD_FINAL_DETAIL_HEADER = "Last assistant message (verbatim):\n"
 # Keep the old ending-detail block's maximum size: old header + 800 chars.
@@ -102,6 +106,35 @@ def _final_detail(last_reasoning: str | None, last_asst: str | None) -> str:
     )
 
 
+def _is_completion_tool_name(name: str) -> bool:
+    normalized = name.lower().replace("-", "_")
+    return (
+        normalized in _COMPLETION_TOOL_NAMES
+        or normalized.endswith("_finish")
+        or normalized.endswith("_complete")
+        or normalized.endswith("_completion")
+    )
+
+
+def _completion_tool_detail(unit: list, last_item: Item) -> str | None:
+    if last_item.type == "function_call" and _is_completion_tool_name(last_item.name):
+        return f"{last_item.name} arguments: {_clip(last_item.arguments, 700)}"
+
+    if last_item.type != "function_call_output":
+        return None
+
+    call = next((it for it in reversed(unit)
+                 if it.type == "function_call"
+                 and it.call_id == last_item.call_id
+                 and _is_completion_tool_name(it.name)), None)
+    if call is None:
+        return None
+
+    args = _clip(call.arguments, 420)
+    output = _clip(last_item.output, 260)
+    return f"{call.name} arguments: {args}\n{call.name} output: {output}"
+
+
 def _ending_signal(unit: list) -> str:
     """Describe how the session ends — the key signal for whether it finished.
 
@@ -129,7 +162,12 @@ def _ending_signal(unit: list) -> str:
         return "Last item: (empty session)"
     lines.append(f"Final transcript item is a {last_item.type}"
                  + (f"/{last_item.role}" if last_item.type == "message" else "") + ".")
-    if last_item.type in ("function_call", "function_call_output"):
+    completion_detail = _completion_tool_detail(unit, last_item)
+    if completion_detail:
+        lines.append("Final tool activity is a completion tool; judge its payload "
+                     "as possible success/failure evidence, not as an interruption.")
+        lines.append("Completion tool detail:\n" + completion_detail)
+    elif last_item.type in ("function_call", "function_call_output"):
         lines.append("⚠ Session ends on tool activity with no concluding assistant message — "
                      "the agent was still working.")
     if tool_calls >= 5 and longest_asst < 200:

@@ -62,6 +62,27 @@ def test_resolution_flags_mid_task_ending():
     assert "Next, I'll start implementing the tokenizer" in prompt
 
 
+def test_resolution_finish_tool_ending_is_not_marked_still_working():
+    from trajlens.annotate.llm import resolution
+
+    items = [
+        MessageItem(role="user", content="add a parser"),
+        FunctionCallItem(
+            name="finish",
+            arguments='{"status":"success","summary":"implemented parser; tests passed"}',
+            call_id="finish1",
+        ),
+        FunctionCallOutputItem(call_id="finish1", output="completed successfully"),
+    ]
+
+    prompt = resolution.build(items, items)[-1]["content"]
+
+    assert "completion tool" in prompt
+    assert "still working" not in prompt
+    assert "implemented parser; tests passed" in prompt
+    assert "completed successfully" in prompt
+
+
 def test_resolution_ending_shows_completion():
     from trajlens.annotate.llm import resolution
 

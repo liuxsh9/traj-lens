@@ -104,6 +104,16 @@ def synthetic_cases() -> dict[str, list]:
         FunctionCallOutputItem(call_id="read", output="def route(): ..."),
     ]
 
+    cases["finish_tool_success_end"] = [
+        MessageItem(role="user", content="Add parser support."),
+        FunctionCallItem(
+            name="finish",
+            arguments='{"status":"success","summary":"parser implemented; tests passed"}',
+            call_id="finish",
+        ),
+        FunctionCallOutputItem(call_id="finish", output="completed successfully"),
+    ]
+
     cases["answered_research_after_tools"] = [
         MessageItem(role="user", content="How does batching work?"),
         *[
@@ -137,6 +147,12 @@ def main() -> None:
         ],
         "unfinished_tool_end": [
             "still working",
+        ],
+        "finish_tool_success_end": [
+            "still working",
+            "completion tool",
+            "parser implemented; tests passed",
+            "completed successfully",
         ],
         "answered_research_after_tools": [
             "Batching works by collecting",
