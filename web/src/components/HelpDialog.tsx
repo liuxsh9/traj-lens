@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export const SCORE_FORMULA_TEXT = "resolved=100，partially_resolved=50，unresolved=0；每次 pushback 扣 5 分，最多扣基础分的一半。";
+export const SCORE_FORMULA_TEXT = "基础分 resolved=90，unverified=70，partially_resolved=45，unresolved=0；再叠加 change_acceptance、pushback、error_recovery、loop、hard_interruption 等调整，封顶 100。";
 
 export const HELP_SECTIONS = [
   {
@@ -22,7 +22,7 @@ export const HELP_SECTIONS = [
     title: "分数计算",
     items: [
       `overall_score 由 resolution 基础分减去 pushback 惩罚得到：${SCORE_FORMULA_TEXT}`,
-      "resolved 表示任务完成，partially_resolved 表示部分完成，unresolved 表示未解决。",
+      "resolved 表示任务完成且经过验证，unverified 表示给出了完整方案但未经验证（如代码未运行、仅凭推理），partially_resolved 表示部分完成，unresolved 表示未解决。",
       "pushback 反映用户中途纠偏或反对的次数，首个用户需求不计入 pushback。",
     ],
   },

@@ -36,10 +36,10 @@ interface Props {
 }
 
 const RES_COLORS: Record<string, string> = {
-  resolved: "var(--good)", partially_resolved: "var(--warn)",
+  resolved: "var(--good)", unverified: "var(--accent)", partially_resolved: "var(--warn)",
   unresolved: "var(--bad)", indeterminate: "var(--faint)",
 };
-const RES_ORDER = ["resolved", "partially_resolved", "unresolved", "indeterminate"];
+const RES_ORDER = ["resolved", "unverified", "partially_resolved", "unresolved", "indeterminate"];
 export const COLLAPSED_TAG_LIMIT = 10;
 
 function orderedResolution(resolution: Record<string, number>): [string, number][] {

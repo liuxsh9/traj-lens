@@ -121,7 +121,7 @@ const columns = [
     cell: (c) => {
       const v = c.getValue();
       if (!v) return <span className="faint">—</span>;
-      const cls = v === "resolved" ? "res-ok" : v === "unresolved" ? "res-fail" : v === "indeterminate" ? "res-ind" : "res-part";
+      const cls = v === "resolved" ? "res-ok" : v === "unverified" ? "res-unver" : v === "unresolved" ? "res-fail" : v === "indeterminate" ? "res-ind" : "res-part";
       return <span className={`chip-sm ${cls}`}>{formatListResolution(v)}</span>;
     },
   }),

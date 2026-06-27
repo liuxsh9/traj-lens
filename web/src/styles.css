@@ -126,6 +126,7 @@ code {
   border-radius: 8px;
 }
 .res-ok   { background: #e8f5ed; color: var(--good); }
+.res-unver{ background: var(--accent-bg); color: var(--accent); }
 .res-fail { background: #fdeeed; color: var(--bad); }
 .res-part { background: #fdf3e6; color: var(--warn); }
 .res-ind  { background: #f0f0f0; color: var(--faint); }
