@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {
   formatAnnotatorLabel,
   formatAnnotatorTarget,
+  buildAnnotatorConfirmationMessage,
+  confirmAnnotatorAction,
   sortAnnotatorsForDisplay,
   visibleStatsTags,
   COLLAPSED_TAG_LIMIT,
@@ -40,3 +42,21 @@ assert.deepEqual(buildCreateJobBody("/tmp/pushback.yaml", "ds1", true), {
   dataset_id: "ds1",
   force: true,
 });
+
+assert.match(buildAnnotatorConfirmationMessage("run_all"), /Run all annotators/);
+assert.match(buildAnnotatorConfirmationMessage("run_all"), /may take time/);
+assert.match(buildAnnotatorConfirmationMessage("force_refresh_all"), /ignore the active-version cache/);
+
+let confirmMessage = "";
+assert.equal(confirmAnnotatorAction("run_all", (message) => {
+  confirmMessage = message;
+  return false;
+}), false);
+assert.match(confirmMessage, /Run all annotators/);
+
+assert.equal(confirmAnnotatorAction("force_refresh_one", (message) => {
+  confirmMessage = message;
+  return true;
+}, "Loop detect"), true);
+assert.match(confirmMessage, /Loop detect/);
+assert.match(confirmMessage, /ignore the active-version cache/);

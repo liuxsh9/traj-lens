@@ -52,6 +52,35 @@ export function visibleStatsTags<T>(tags: T[], expanded: boolean): T[] {
   return expanded ? tags : tags.slice(0, COLLAPSED_TAG_LIMIT);
 }
 
+export type AnnotatorConfirmationAction = "run_all" | "force_refresh_all" | "force_refresh_one";
+
+export function buildAnnotatorConfirmationMessage(action: AnnotatorConfirmationAction, annotatorLabel?: string): string {
+  if (action === "run_all") {
+    return [
+      "Run all annotators for this dataset?",
+      "This starts one job per annotator and may take time on large datasets.",
+    ].join("\n\n");
+  }
+  if (action === "force_refresh_all") {
+    return [
+      "Force refresh all annotators for this dataset?",
+      "This will ignore the active-version cache and re-run annotators even when annotations already exist. Existing results may be replaced, and the run may take time.",
+    ].join("\n\n");
+  }
+  return [
+    `Force refresh ${annotatorLabel ?? "this annotator"}?`,
+    "This will ignore the active-version cache and re-run this annotator even when annotations already exist. Existing results for this annotator may be replaced.",
+  ].join("\n\n");
+}
+
+export function confirmAnnotatorAction(
+  action: AnnotatorConfirmationAction,
+  confirmFn: (message: string) => boolean = window.confirm,
+  annotatorLabel?: string,
+): boolean {
+  return confirmFn(buildAnnotatorConfirmationMessage(action, annotatorLabel));
+}
+
 function StatsPanel({
   stats,
   filterRules,
@@ -399,6 +428,7 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
   }, [activeJobs, runMetrics]);
 
   const runAll = async (force = false) => {
+    if (!confirmAnnotatorAction(force ? "force_refresh_all" : "run_all")) return;
     setRunning(true);
     try {
       const results = await Promise.allSettled(
@@ -440,6 +470,7 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
   };
 
   const runOne = async (a: AnnotatorInfo, force = false) => {
+    if (force && !confirmAnnotatorAction("force_refresh_one", window.confirm, formatAnnotatorLabel(a.id))) return;
     try {
       const job = await createJob(a.path, datasetId, force);
       setActiveJobs((prev) => keepLatestJobsByAnnotator([...prev, job]));
