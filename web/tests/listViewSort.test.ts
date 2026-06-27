@@ -11,6 +11,7 @@ import {
   readListScrollPosition,
   resetListScrollPosition,
   saveListScrollPosition,
+  shouldResetListScrollForChange,
   shouldResetListForExternalFilters,
   shouldShowExportSelection,
 } from "../src/components/ListView";
@@ -130,3 +131,8 @@ assert.equal(readListScrollPosition(scrollStorage, "list:dataset-1:scroll"), 0);
 saveListScrollPosition(scrollStorage, "list:dataset-1:scroll", 120);
 resetListScrollPosition(scrollStorage, "list:dataset-1:scroll");
 assert.equal(readListScrollPosition(scrollStorage, "list:dataset-1:scroll"), 0);
+
+assert.equal(shouldResetListScrollForChange("page"), true);
+assert.equal(shouldResetListScrollForChange("pageSize"), true);
+assert.equal(shouldResetListScrollForChange("filter"), true);
+assert.equal(shouldResetListScrollForChange("sort"), false);

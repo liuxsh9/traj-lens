@@ -108,6 +108,12 @@ export function resetListScrollPosition(storage: ListScrollStorage, key: string)
   storage.removeItem(key);
 }
 
+type ListStateChange = "page" | "pageSize" | "filter" | "sort";
+
+export function shouldResetListScrollForChange(change: ListStateChange) {
+  return change !== "sort";
+}
+
 const columns = [
   col.accessor((r) => r.annotations?.title ?? "", {
     id: "title",
@@ -333,8 +339,7 @@ export function ListView({ onOpen, datasetId, filterRules: controlledFilterRules
   const handleSortChange = useCallback((updater: SortingState | ((old: SortingState) => SortingState)) => {
     setSorting(typeof updater === "function" ? updater(effectiveSorting) : updater);
     setPage(0);
-    resetScroll();
-  }, [effectiveSorting, resetScroll, setPage, setSorting]);
+  }, [effectiveSorting, setPage, setSorting]);
 
   const table = useReactTable({
     data: items,
