@@ -240,6 +240,13 @@ def test_overall_score_dimensions():
     assert fn(None, None, _anns(accept="low", loop=True, errors=[(True, False)])) == 55.0
     # clamps at 0
     assert fn(None, None, _anns(resolution="unresolved", loop=True)) == 0.0
+    # unverified base = 70 (between partial=45 and resolved=90)
+    assert fn(None, None, _anns(resolution="unverified")) == 70.0
+    # pushback cap is HALF THIS SESSION's base, not a fixed 45:
+    #  resolved (base 90): 10 pushbacks ×5 = 50, capped at 45 → 90−45 = 45
+    assert fn(None, None, _anns(resolution="resolved", pb=10)) == 45.0
+    #  unverified (base 70): 10 pushbacks ×5 = 50, capped at 35 → 70−35 = 35 (not 25)
+    assert fn(None, None, _anns(resolution="unverified", pb=10)) == 35.0
 
 
 def test_loop_and_recovery_counts_from_annotations():
