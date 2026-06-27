@@ -328,6 +328,45 @@ def test_query_trajectories_sorts_all_list_columns(tmp_path):
         assert got["items"][0]["content_hash"] == first_hash, sort_by
 
 
+def test_query_trajectories_filters_acceptance_none_and_likelihood(tmp_path):
+    conn = dbmod.connect(str(tmp_path / "t.db")); dbmod.migrate(conn)
+    repo.register_annotator(conn, id="change_acceptance", version="v1", config_hash="cfg")
+    raw_bytes = (FIXTURES / "panguml2_weather.json").read_bytes()
+    traj, _ = detect_and_parse(json.loads(raw_bytes))
+
+    hashes = []
+    rows = [
+        {"likelihood": "high", "no_edits": False, "score": 80.0},
+        {"likelihood": "none", "no_edits": True, "score": None},
+    ]
+    for idx, row in enumerate(rows):
+        t = traj.model_copy(deep=True)
+        t.items[1].content = f"acceptance filter row {idx}"
+        t.content_hash = content_hash(t.items, t.tools)
+        h = repo.put_trajectory(conn, t, source_path=f"accept-{idx}.json")
+        repo.link_annotation_target(conn, target_hash=h, content_hash=h, target_type="trajectory", target_idx=0)
+        conn.commit()
+        repo.put_annotation(conn, target_hash=h, annotator_id="change_acceptance", annotator_version="v1",
+                            value={"likelihood": row["likelihood"], "no_edits": row["no_edits"]}, inputs_hash="test")
+        if row["score"] is not None:
+            repo.put_metric(conn, content_hash=h, metric_id="acceptance_likelihood",
+                            value=row["score"], version="test")
+        hashes.append(h)
+
+    no_edits = repo.query_trajectories(conn, filters=[
+        {"field": "acceptance", "op": "=", "value": "none"},
+    ])
+    assert no_edits["total"] == 1
+    assert no_edits["items"][0]["content_hash"] == hashes[1]
+    assert no_edits["items"][0]["annotations"]["acceptance"] == "none"
+
+    likely = repo.query_trajectories(conn, filters=[
+        {"field": "acceptance_likelihood", "op": "≥", "value": "50"},
+    ])
+    assert likely["total"] == 1
+    assert likely["items"][0]["content_hash"] == hashes[0]
+
+
 def test_dataset_stats_returns_all_tags(tmp_path):
     conn = dbmod.connect(str(tmp_path / "t.db")); dbmod.migrate(conn)
     ds = repo.create_dataset(conn, name="many-tags")

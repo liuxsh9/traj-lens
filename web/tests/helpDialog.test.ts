@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { HELP_BUTTON_CLASS, HELP_SECTIONS, SCORE_FORMULA_TEXT } from "../src/components/HelpDialog";
 
-assert.equal(SCORE_FORMULA_TEXT, "resolved=100，partially_resolved=50，unresolved=0；每次 pushback 扣 5 分，最多扣基础分的一半。");
+assert.equal(SCORE_FORMULA_TEXT, "基础分 resolved=90，unverified=70，partially_resolved=45，unresolved=0；再叠加 change_acceptance、pushback、error_recovery、loop、hard_interruption 等调整，封顶 100。");
 
 assert.deepEqual(
   HELP_SECTIONS.map((section) => section.title),

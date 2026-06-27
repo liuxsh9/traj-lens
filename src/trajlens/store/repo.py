@@ -625,7 +625,7 @@ def query_trajectories(
         ),
         "pushback_count": "pushback_count", "error_steps": "json_extract(tool_intensity, '$.error_steps')",
         "loop_count": "loop_count", "recovery_count": "recovery_count", "score": "overall_score",
-        "security_findings": "introduced_findings_count",
+        "acceptance_likelihood": "acceptance_likelihood", "security_findings": "introduced_findings_count",
         "created_at": "created_at",
     }
     op_map = {"=": "=", "≥": ">=", "≤": "<=", "≠": "!="}
@@ -700,7 +700,7 @@ def query_trajectories(
             summary["tags"] = ann_topic.get("tags", [])
         if ann_int:
             summary["interrupted"] = ann_int.get("interrupted", False)
-        if ann_acc and not ann_acc.get("no_edits"):
+        if ann_acc:
             summary["acceptance"] = ann_acc.get("likelihood")
         items.append({
             "content_hash": r["content_hash"],

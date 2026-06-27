@@ -21,15 +21,18 @@ interface FieldDef {
   options?: string[]; // for enum
 }
 
-const FIELDS: FieldDef[] = [
-  { key: "resolution", label: "resolution", type: "enum", ops: ["=", "≠"], options: [] },
-  { key: "acceptance", label: "acceptance", type: "enum", ops: ["=", "≠"], options: ["high", "medium", "low"] },
+export const FILTER_FIELDS: FieldDef[] = [
+  { key: "resolution", label: "resolution", type: "enum", ops: ["=", "≠"], options: ["resolved", "unverified", "partially_resolved", "unresolved", "indeterminate"] },
+  { key: "acceptance", label: "acceptance", type: "enum", ops: ["=", "≠"], options: ["high", "medium", "low", "none"] },
   { key: "interrupted", label: "interrupted", type: "enum", ops: ["="], options: ["true", "false"] },
   { key: "turns", label: "turns", type: "number", ops: ["≥", "≤", "="] },
   { key: "steps", label: "steps", type: "number", ops: ["≥", "≤", "="] },
   { key: "tools", label: "tools", type: "number", ops: ["≥", "≤", "="] },
   { key: "pushback_count", label: "pushback", type: "number", ops: ["≥", "≤", "="] },
   { key: "error_steps", label: "error steps", type: "number", ops: ["≥", "≤", "="] },
+  { key: "loop_count", label: "loop", type: "number", ops: ["≥", "≤", "="] },
+  { key: "recovery_count", label: "recovery", type: "number", ops: ["≥", "≤", "="] },
+  { key: "acceptance_likelihood", label: "accept score", type: "number", ops: ["≥", "≤", "="] },
   { key: "score", label: "score", type: "number", ops: ["≥", "≤", "="] },
   { key: "security_findings", label: "security", type: "number", ops: ["≥", "≤", "="] },
   { key: "tags", label: "tags", type: "tags", ops: ["∋", "∌"] },
@@ -45,14 +48,15 @@ function getVal(row: TrajSummary, field: string): unknown {
   const metricMap: Record<string, string> = {
     turns: "turn_count", steps: "step_count", tools: "tool_count",
     pushback_count: "pushback_count", error_steps: "error_steps", score: "overall_score",
-    security_findings: "introduced_findings_count",
+    loop_count: "loop_count", recovery_count: "recovery_count",
+    acceptance_likelihood: "acceptance_likelihood", security_findings: "introduced_findings_count",
   };
   return row.metrics?.[metricMap[field]] ?? 0;
 }
 
 function matchRule(row: TrajSummary, r: FilterRule): boolean {
   const v = getVal(row, r.field);
-  const def = FIELDS.find((f) => f.key === r.field);
+  const def = FILTER_FIELDS.find((f) => f.key === r.field);
   if (!def) return true;
 
   if (def.type === "enum") {
@@ -176,12 +180,12 @@ export function FilterBar({
     setMenuOpen(false);
   };
 
-  const def = adding ? FIELDS.find((f) => f.key === adding) : null;
+  const def = adding ? FILTER_FIELDS.find((f) => f.key === adding) : null;
 
   return (
     <div className="filter-bar" ref={menuRef}>
       {rules.map((r) => {
-        const d = FIELDS.find((f) => f.key === r.field);
+        const d = FILTER_FIELDS.find((f) => f.key === r.field);
         return (
           <span key={r.id} className="filter-chip">
             {d?.label ?? r.field} {r.op} {r.value}
@@ -194,7 +198,7 @@ export function FilterBar({
 
       {menuOpen && !adding && (
         <div className="filter-dropdown">
-          {FIELDS.map((f) => (
+          {FILTER_FIELDS.map((f) => (
             <div key={f.key} className="filter-dropdown-item" onClick={() => { setAdding(f.key); setMenuOpen(false); }}>
               {f.label}
               <span className="faint" style={{ marginLeft: 6, fontSize: 11 }}>
