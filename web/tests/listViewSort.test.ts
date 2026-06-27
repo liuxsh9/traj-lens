@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { resetDatasetListScrollOnOpen } from "../src/App";
 import {
   formatListResolution,
   getListAcceptClass,
@@ -136,3 +137,7 @@ assert.equal(shouldResetListScrollForChange("page"), true);
 assert.equal(shouldResetListScrollForChange("pageSize"), true);
 assert.equal(shouldResetListScrollForChange("filter"), true);
 assert.equal(shouldResetListScrollForChange("sort"), false);
+
+saveListScrollPosition(scrollStorage, getListScrollKey("dataset-2"), 360);
+resetDatasetListScrollOnOpen(scrollStorage, "dataset-2");
+assert.equal(readListScrollPosition(scrollStorage, getListScrollKey("dataset-2")), 0);

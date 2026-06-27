@@ -82,13 +82,15 @@ export function shouldResetListForExternalFilters({
   return hasControlledFilters && previousKey !== null && previousKey !== nextKey;
 }
 
-type ListScrollStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+type ListScrollReader = Pick<Storage, "getItem">;
+type ListScrollWriter = Pick<Storage, "setItem">;
+type ListScrollRemover = Pick<Storage, "removeItem">;
 
 export function getListScrollKey(datasetId?: string) {
   return `list:${datasetId ?? "_all"}:scroll`;
 }
 
-export function readListScrollPosition(storage: ListScrollStorage, key: string) {
+export function readListScrollPosition(storage: ListScrollReader, key: string) {
   let n = 0;
   try {
     const raw = storage.getItem(key);
@@ -99,12 +101,12 @@ export function readListScrollPosition(storage: ListScrollStorage, key: string) 
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-export function saveListScrollPosition(storage: ListScrollStorage, key: string, y: number) {
+export function saveListScrollPosition(storage: ListScrollWriter, key: string, y: number) {
   const n = Number.isFinite(y) && y > 0 ? y : 0;
   storage.setItem(key, JSON.stringify(n));
 }
 
-export function resetListScrollPosition(storage: ListScrollStorage, key: string) {
+export function resetListScrollPosition(storage: ListScrollRemover, key: string) {
   storage.removeItem(key);
 }
 
