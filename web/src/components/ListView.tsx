@@ -82,6 +82,32 @@ export function shouldResetListForExternalFilters({
   return hasControlledFilters && previousKey !== null && previousKey !== nextKey;
 }
 
+type ListScrollStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+export function getListScrollKey(datasetId?: string) {
+  return `list:${datasetId ?? "_all"}:scroll`;
+}
+
+export function readListScrollPosition(storage: ListScrollStorage, key: string) {
+  let n = 0;
+  try {
+    const raw = storage.getItem(key);
+    n = raw ? Number(JSON.parse(raw)) : 0;
+  } catch {
+    n = 0;
+  }
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+export function saveListScrollPosition(storage: ListScrollStorage, key: string, y: number) {
+  const n = Number.isFinite(y) && y > 0 ? y : 0;
+  storage.setItem(key, JSON.stringify(n));
+}
+
+export function resetListScrollPosition(storage: ListScrollStorage, key: string) {
+  storage.removeItem(key);
+}
+
 const columns = [
   col.accessor((r) => r.annotations?.title ?? "", {
     id: "title",
@@ -209,6 +235,7 @@ export function ListView({ onOpen, datasetId, filterRules: controlledFilterRules
   // persist list UI state per dataset so it survives opening a sample (which
   // unmounts this view) and page reloads.
   const k = `list:${datasetId ?? "_all"}`;
+  const scrollKey = getListScrollKey(datasetId);
   const [page, setPage] = useSticky(`${k}:page`, 0);
   const [pageSize, setPageSize] = useSticky<number>(`${k}:size`, 50);
   const [sorting, setSorting] = useSticky<SortingState>(`${k}:sort`, defaultSorting);
@@ -247,17 +274,29 @@ export function ListView({ onOpen, datasetId, filterRules: controlledFilterRules
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  const resetScroll = useCallback(() => {
+    try { resetListScrollPosition(sessionStorage, scrollKey); } catch { /* private mode */ }
+    window.scrollTo({ top: 0 });
+  }, [scrollKey]);
+
   const handlePageSizeChange = useCallback((size: number) => {
     setPageSize(size);
     setPage(0);
-  }, []);
+    resetScroll();
+  }, [resetScroll, setPage, setPageSize]);
+
+  const handlePageChange = useCallback((nextPage: number) => {
+    setPage(nextPage);
+    resetScroll();
+  }, [resetScroll, setPage]);
 
   const handleFilterChange = useCallback((rules: FilterRule[]) => {
     setFilterRules(rules);
     setPage(0);
     setExcluded(new Set());  // matched set changed → exclusions no longer meaningful
     setExportMode(false);
-  }, [setFilterRules, setPage]);
+    resetScroll();
+  }, [resetScroll, setFilterRules, setPage]);
 
   useEffect(() => {
     if (shouldResetListForExternalFilters({
@@ -268,9 +307,18 @@ export function ListView({ onOpen, datasetId, filterRules: controlledFilterRules
       setPage(0);
       setExcluded(new Set());
       setExportMode(false);
+      resetScroll();
     }
     previousControlledFilterRulesKey.current = filterRulesKey;
-  }, [controlledFilterRules, filterRulesKey, setPage]);
+  }, [controlledFilterRules, filterRulesKey, resetScroll, setPage]);
+
+  useEffect(() => {
+    if (isLoading || items.length === 0) return;
+    let y = 0;
+    try { y = readListScrollPosition(sessionStorage, scrollKey); } catch { return; }
+    if (y <= 0) return;
+    requestAnimationFrame(() => window.scrollTo({ top: y }));
+  }, [isLoading, items.length, scrollKey]);
 
   const toggleRow = useCallback((hash: string) => {
     setExcluded((prev) => {
@@ -285,7 +333,8 @@ export function ListView({ onOpen, datasetId, filterRules: controlledFilterRules
   const handleSortChange = useCallback((updater: SortingState | ((old: SortingState) => SortingState)) => {
     setSorting(typeof updater === "function" ? updater(effectiveSorting) : updater);
     setPage(0);
-  }, [effectiveSorting, setPage, setSorting]);
+    resetScroll();
+  }, [effectiveSorting, resetScroll, setPage, setSorting]);
 
   const table = useReactTable({
     data: items,
@@ -300,8 +349,9 @@ export function ListView({ onOpen, datasetId, filterRules: controlledFilterRules
   const handleRowClick = useCallback((hash: string) => {
     const sel = window.getSelection();
     if (sel && sel.toString().length > 0) return;
+    try { saveListScrollPosition(sessionStorage, scrollKey, window.scrollY); } catch { /* private mode */ }
     onOpen(hash);
-  }, [onOpen]);
+  }, [onOpen, scrollKey]);
 
   // export = matched set minus un-checked rows. selectedCount is exact across
   // pages: total is the server's filtered count, excluded is the un-check set.
@@ -432,7 +482,7 @@ export function ListView({ onOpen, datasetId, filterRules: controlledFilterRules
 
       {total > 0 && (
         <Pagination page={page} totalPages={totalPages} pageSize={pageSize}
-          onChange={setPage} onPageSizeChange={handlePageSizeChange} />
+          onChange={handlePageChange} onPageSizeChange={handlePageSizeChange} />
       )}
     </div>
   );

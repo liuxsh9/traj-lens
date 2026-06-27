@@ -7,6 +7,10 @@ import {
   getListSortParams,
   LIST_SORT_DESC_FIRST,
   EXPORT_MODE_HINT,
+  getListScrollKey,
+  readListScrollPosition,
+  resetListScrollPosition,
+  saveListScrollPosition,
   shouldResetListForExternalFilters,
   shouldShowExportSelection,
 } from "../src/components/ListView";
@@ -102,3 +106,27 @@ assert.equal(shouldResetListForExternalFilters({
   previousKey: "[]",
   nextKey: "[tags]",
 }), false);
+
+const scrollStore = new Map<string, string>();
+const scrollStorage = {
+  getItem: (key: string) => scrollStore.get(key) ?? null,
+  setItem: (key: string, value: string) => { scrollStore.set(key, value); },
+  removeItem: (key: string) => { scrollStore.delete(key); },
+};
+
+assert.equal(getListScrollKey("dataset-1"), "list:dataset-1:scroll");
+assert.equal(getListScrollKey(undefined), "list:_all:scroll");
+assert.equal(readListScrollPosition(scrollStorage, "list:dataset-1:scroll"), 0);
+
+saveListScrollPosition(scrollStorage, "list:dataset-1:scroll", 240);
+assert.equal(readListScrollPosition(scrollStorage, "list:dataset-1:scroll"), 240);
+
+saveListScrollPosition(scrollStorage, "list:dataset-1:scroll", -10);
+assert.equal(readListScrollPosition(scrollStorage, "list:dataset-1:scroll"), 0);
+
+saveListScrollPosition(scrollStorage, "list:dataset-1:scroll", Number.NaN);
+assert.equal(readListScrollPosition(scrollStorage, "list:dataset-1:scroll"), 0);
+
+saveListScrollPosition(scrollStorage, "list:dataset-1:scroll", 120);
+resetListScrollPosition(scrollStorage, "list:dataset-1:scroll");
+assert.equal(readListScrollPosition(scrollStorage, "list:dataset-1:scroll"), 0);
