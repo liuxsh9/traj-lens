@@ -252,11 +252,13 @@ export interface JobInfo {
   job_id: string;
   annotator_id: string;
   status: string;
+  queued_behind?: number;
   total?: number;
   done?: number;
   skipped?: number;
   errors?: string;
   created_at?: string;
+  updated_at?: string;
   dataset_id?: string | null;
 }
 

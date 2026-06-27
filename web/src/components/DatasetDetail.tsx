@@ -18,7 +18,13 @@ import {
   type FilterRule,
 } from "./FilterBar";
 import { useSticky } from "../useSticky";
-import { keepLatestJobsByAnnotator, summarizeAnnotatorProgress } from "./annotatorProgress";
+import {
+  formatJobLabel,
+  formatJobTiming,
+  jobErrCount,
+  keepLatestJobsByAnnotator,
+  summarizeAnnotatorProgress,
+} from "./annotatorProgress";
 import { HelpButton } from "./HelpDialog";
 
 interface Props {
@@ -275,33 +281,6 @@ function UploadZone({ datasetId, onDone }: { datasetId: string; onDone: () => vo
 
 /* ── Annotator runner ─────────────────────────────────────────────── */
 
-function jobErrCount(j: JobInfo): number {
-  if (!j.errors) return 0;
-  try { return JSON.parse(j.errors).length; } catch { return 0; }
-}
-
-// Human-readable status for one annotator job. "done 0/86" used to read as a
-// failure; it's actually "86 already annotated, 0 new".
-function jobLabel(j: JobInfo): { text: string; color: string } {
-  if (j.status === "error") return { text: "failed", color: "var(--bad)" };
-  if (j.status === "interrupted") {
-    // server restarted mid-run; re-running is cheap (cache-aware) and resumes
-    const prog = j.total ? ` at ${j.done ?? 0}/${j.total}` : "";
-    return { text: `interrupted${prog} · re-run to resume`, color: "var(--warn)" };
-  }
-  if (j.status === "pending") {
-    const prog = j.total ? ` ${j.done ?? 0}/${j.total}` : "";
-    return { text: `running…${prog}`, color: "var(--warn)" };
-  }
-  const done = j.done ?? 0, skipped = j.skipped ?? 0, errs = jobErrCount(j);
-  const parts: string[] = [];
-  if (done > 0) parts.push(`${done} new`);
-  if (skipped > 0) parts.push(`${skipped} cached`);
-  if (errs > 0) parts.push(`${errs} errors`);
-  if (parts.length === 0) parts.push("nothing to do");
-  return { text: `✓ ${parts.join(" · ")}`, color: errs > 0 ? "var(--warn)" : "var(--good)" };
-}
-
 function metricsLabel(m: { status: string; computed?: number }): { text: string; color: string } {
   if (m.status === "pending") return { text: "running…", color: "var(--warn)" };
   if (m.status === "error") return { text: "failed", color: "var(--bad)" };
@@ -423,14 +402,24 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
     setRunning(true);
     try {
       const results = await Promise.allSettled(
-        annotators.map((a) => createJob(a.path, datasetId, force))
+        annotators.map(async (a) => {
+          const job = await createJob(a.path, datasetId, force);
+          setActiveJobs((prev) => keepLatestJobsByAnnotator([...prev, job]));
+          return job;
+        })
       );
       const jobs = results
         .filter((r): r is PromiseFulfilledResult<JobInfo> => r.status === "fulfilled")
         .map((r) => r.value);
       // semgrep batch scan rides along — it's a job too (skipped if not installed)
-      try { jobs.push(await scanDataset(datasetId)); } catch { /* semgrep absent */ }
-      if (jobs.length > 0) setActiveJobs(keepLatestJobsByAnnotator(jobs));
+      try {
+        const scanJob = await scanDataset(datasetId);
+        jobs.push(scanJob);
+        setActiveJobs((prev) => keepLatestJobsByAnnotator([...prev, scanJob]));
+      } catch { /* semgrep absent */ }
+      if (jobs.length > 0) {
+        setActiveJobs((prev) => keepLatestJobsByAnnotator([...prev, ...jobs]));
+      }
     } finally {
       setRunning(false);
     }
@@ -551,9 +540,10 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
               );
             })()}
             {activeJobs.map((j) => {
-              const { text, color } = jobLabel(j);
+              const { text, color } = formatJobLabel(j);
+              const timing = formatJobTiming(j);
               return (
-                <span key={j.job_id} className="chip chip-sm">
+                <span key={j.job_id} className="chip chip-sm" title={timing || undefined}>
                   {j.annotator_id}: <span style={{ color }}>{text}</span>
                 </span>
               );

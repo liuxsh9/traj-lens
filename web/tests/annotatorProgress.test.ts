@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { keepLatestJobsByAnnotator, summarizeAnnotatorProgress } from "../src/components/annotatorProgress";
+import {
+  formatJobLabel,
+  formatJobTiming,
+  keepLatestJobsByAnnotator,
+  summarizeAnnotatorProgress,
+} from "../src/components/annotatorProgress";
 import type { JobInfo } from "../src/api";
 
 function job(partial: Partial<JobInfo>): JobInfo {
@@ -21,8 +26,17 @@ const later = summarizeAnnotatorProgress([
   job({ job_id: "b", done: 0, total: 200 }),
 ]);
 
-assert.equal(early.pct, 40);
+assert.equal(early.pct, 0);
 assert.ok(later.pct >= early.pct, `progress regressed from ${early.pct}% to ${later.pct}%`);
+
+const weighted = summarizeAnnotatorProgress([
+  job({ job_id: "small", done: 50, total: 100 }),
+  job({ job_id: "large", done: 0, total: 900 }),
+]);
+
+assert.equal(weighted.finished, 50);
+assert.equal(weighted.total, 1000);
+assert.equal(weighted.pct, 5);
 
 const done = summarizeAnnotatorProgress([
   job({ status: "done", done: 100, total: 100 }),
@@ -46,3 +60,30 @@ const withFreshPending = keepLatestJobsByAnnotator([
 ]);
 
 assert.deepEqual(withFreshPending.map((j) => j.job_id), ["fresh"]);
+
+assert.deepEqual(formatJobLabel(job({ status: "pending" })), {
+  text: "preparing targets…",
+  color: "var(--warn)",
+});
+
+assert.deepEqual(formatJobLabel(job({ status: "pending", total: 100, done: 25, skipped: 10 })), {
+  text: "calling LLM… 35/100",
+  color: "var(--warn)",
+});
+
+assert.deepEqual(formatJobLabel(job({ status: "pending", queued_behind: 2 })), {
+  text: "queued behind 2 jobs",
+  color: "var(--warn)",
+});
+
+assert.equal(formatJobTiming(job({
+  status: "pending",
+  created_at: "2026-06-27T00:00:00Z",
+  updated_at: "2026-06-27T00:01:10Z",
+}), Date.parse("2026-06-27T00:01:15Z")), "elapsed 1m · updated 5s ago");
+
+assert.equal(formatJobTiming(job({
+  status: "done",
+  created_at: "2026-06-27T00:00:00Z",
+  updated_at: "2026-06-27T00:02:30Z",
+}), Date.parse("2026-06-27T00:03:00Z")), "took 2m");
