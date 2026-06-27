@@ -615,7 +615,8 @@ def query_trajectories(
         "title": "json_extract(ann_topic, '$.title')",
         "resolution": (
             "CASE json_extract(ann_resolution, '$.resolution') "
-            "WHEN 'resolved' THEN 3 WHEN 'partially_resolved' THEN 2 "
+            "WHEN 'resolved' THEN 4 WHEN 'unverified' THEN 3 "
+            "WHEN 'partially_resolved' THEN 2 "
             "WHEN 'unresolved' THEN 1 WHEN 'indeterminate' THEN 0 ELSE -1 END"
         ),
         "acceptance": (

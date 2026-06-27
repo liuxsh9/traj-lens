@@ -16,6 +16,12 @@ def test_parse_valid_label():
         "resolution": "resolved", "reason": "tests pass"}
 
 
+def test_parse_unverified_label():
+    # New state: complete solution delivered but never verified.
+    out = resolution.parse('{"label": "unverified", "reason": "code never run"}')
+    assert out["resolution"] == "unverified"
+
+
 def test_parse_markdown_fenced():
     out = resolution.parse('```json\n{"label": "unresolved", "reason": "x"}\n```')
     assert out["resolution"] == "unresolved"

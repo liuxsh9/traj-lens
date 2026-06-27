@@ -6,4 +6,4 @@ module: trajlens.annotate.llm.resolution
 profile: default
 # bump when the prompt/build logic changes — compute_version only hashes this
 # YAML, so a prompt edit needs a version touch to invalidate cached annotations.
-prompt_version: 5  # 5: treat finish-like final tools as completion evidence
+prompt_version: 8  # 8: action artifact w/o execution evidence = unverified, not resolved (self-claim ≠ verification)

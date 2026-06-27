@@ -10,7 +10,7 @@ from trajlens.core.model import Trajectory
 from trajlens.metrics import register
 
 _VERSION = "2"
-_OVERALL_SCORE_VERSION = "4"
+_OVERALL_SCORE_VERSION = "5"
 
 
 @register("turn_count", _VERSION)
@@ -121,8 +121,8 @@ def acceptance_likelihood(traj: Trajectory, conn, anns) -> float | None:
 def overall_score(traj: Trajectory, conn, anns) -> int | None:
     """Composite session-quality score over five dimensions.
 
-    base = resolution {resolved:90, partially:45, unresolved:0} — leaves 10pt of
-    headroom so only a resolved-AND-accepted session reaches 100.
+    base = resolution {resolved:90, unverified:70, partially:45, unresolved:0} —
+    leaves 10pt of headroom so only a resolved-AND-accepted session reaches 100.
       + accept high  : +10   (changes committed/pushed)
       − accept low   : −15   (changes reverted / user rejected)
       − pushback     : −5 each, capped at base×0.5
@@ -159,7 +159,7 @@ def overall_score(traj: Trajectory, conn, anns) -> int | None:
     if resolution is None or resolution == "indeterminate":
         return None
 
-    score = {"resolved": 90, "partially_resolved": 45, "unresolved": 0}.get(resolution, 0)
+    score = {"resolved": 90, "unverified": 70, "partially_resolved": 45, "unresolved": 0}.get(resolution, 0)
     score += {"high": 10}.get(accept, 0)          # accept bonus (None/medium → 0)
     score -= {"low": 15}.get(accept, 0)           # accept penalty
     score -= min(pb_count * 5, 90 * 0.5)          # pushback, capped at half max base

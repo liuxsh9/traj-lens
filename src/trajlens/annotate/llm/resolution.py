@@ -9,7 +9,7 @@ SCHEMA = {
     "properties": {
         "label": {
             "type": "string",
-            "enum": ["resolved", "partially_resolved", "unresolved", "indeterminate"],
+            "enum": ["resolved", "unverified", "partially_resolved", "unresolved", "indeterminate"],
         },
         "reason": {"type": "string"},
     },
@@ -21,26 +21,38 @@ SYSTEM_PROMPT = """You classify whether a coding agent session successfully reso
 
 Analyze the FULL trajectory: initial request, agent actions, tool outputs, and final state.
 
+FIRST classify the task type, because "done" means different things:
+
+- ADVISORY task (question / explanation / how-to / code-review / recommendation): the deliverable IS the answer. The agent finishes by giving a complete, direct answer. The agent CANNOT run anything in the user's environment, so "the user still has to apply it" is the NORMAL, EXPECTED end — it is NOT incomplete work. A coherent, on-point final answer = resolved. Do NOT downgrade an advisory task to partially_resolved merely because the user did not come back to confirm, or because the agent could not execute the suggestion.
+- ACTION task (the agent itself must produce/change an artifact: write code, edit files, run commands, build, fix a failing test): "done" has TWO requirements — the artifact must exist, AND it must be verified to work. An ACTION task where the artifact exists but was never run/tested/checked is "unverified", NOT "resolved". The agent merely SAYING "done" / "successfully created X" is a CLAIM, not verification — only actual execution evidence (a run, a passing test, expected output, user confirmation) counts.
+
 Categories (choose exactly one):
 
-- resolved — The agent completed the task. Requires POSITIVE completion evidence in the FINAL turns: tests pass, code compiles, the agent states it is done, the user confirms, or the final state clearly and fully satisfies the original request. Absence of errors is NOT enough.
-- partially_resolved — The agent made meaningful progress but left significant work undone: partial implementation, some tests failing, the user had to manually finish, OR the session ends with the agent still mid-task (announcing or about to perform further work).
-- unresolved — The agent failed to solve the task: stuck in a loop, gave up, produced broken code, or the final state does not address the original request.
-- indeterminate — Not enough information to judge: session was cut short, no clear success/failure signal, or the task itself is ambiguous.
+- resolved — The task is complete with affirmative end-state evidence.
+  • ADVISORY: the agent delivered a complete, direct, on-point answer to what was asked.
+  • ACTION: the artifact is produced AND there is POSITIVE verification in the FINAL turns (tests pass, code compiles/runs, the agent ran it and saw expected output, or the user confirms). Absence of errors is NOT enough, and the agent's own "I'm done" claim is NOT enough — without execution evidence, an otherwise-complete ACTION result is "unverified".
+- unverified — A complete deliverable whose correctness is NOT confirmed.
+  • ACTION: full code / a finished implementation was produced but never run or tested — looks done, could well be right, but no evidence confirms it.
+  • ADVISORY: a complete answer that hinges on a factual/correctness claim the agent could not check (recall-based, "I believe this is CF problem X", an unsourced factual assertion). Use when the only thing missing is verification, and the deliverable itself is complete. (If the deliverable is also incomplete, use partially_resolved.)
+- partially_resolved — The DELIVERABLE ITSELF is incomplete: partial implementation, the agent stops mid-task (announcing or about to do more work), only some of a multi-part request answered, an ACTION task where the agent only described what to do but never produced the artifact it was asked to produce. NOT for an advisory task that gave a full answer the user merely hasn't applied yet.
+- unresolved — The agent failed to address the request: stuck in a loop, gave up, produced code shown to be broken, answered a different question, or the final state does not address the original task. (A complete-but-unconfirmed solution is "unverified", not "unresolved".)
+- indeterminate — Not enough information to judge: session was cut short, no clear success/failure signal, the task drifted to an unrelated topic, or the task itself is ambiguous.
 
 Guidelines:
-- Focus on the OUTCOME, not the process. A messy path that ends with working code is "resolved".
+- Focus on the OUTCOME, not the process. A messy path that ends with a complete answer (advisory) or verified working code (action) is "resolved".
+- resolved vs unverified turns on EVIDENCE for ACTION tasks: complete code that was actually run/tested = "resolved"; the same code never executed = "unverified". For ADVISORY tasks a complete answer is "resolved" unless it rests on an unchecked correctness claim → then "unverified".
+- Do NOT downgrade a finished, coherent solution to "unresolved" just because verification is absent — "unresolved" is actual failure, "unverified" is unconfirmed success.
 - Weight the final turns most heavily. Look for the final answer/conclusion and the nearest preceding tool evidence, especially tests/builds/checks that passed or failed.
 - Multiple user corrections followed by eventual success = "resolved" (the corrections helped).
 - CRITICAL — do not over-credit in-progress work. If the final assistant turn announces or is about to do more work ("next, I'll…", "now let me…", "let me continue…", "I'll start by…"), or the session ends on a pending tool call / tool output with no concluding wrap-up, the task is NOT finished → choose "partially_resolved" (clear progress) or "indeterminate" (cut short), NEVER "resolved".
-- "resolved" demands an affirmative end state, not merely the lack of a visible failure.
-- Information gathering is NOT resolution. For research/explanation tasks ("how does X work?", "is there a mechanism that…?"), the agent must actually deliver a synthesized answer to the user. A session full of Read/Grep/Glob calls that ends without the agent organizing its findings into an answer is "partially_resolved" (found the info, never answered) or "unresolved" (never answered) — never "resolved", no matter how thorough the searching looked.
+- "resolved" demands an affirmative end state: a complete answer (advisory) or a verified artifact (action). A complete-but-unverified action solution is "unverified", not "resolved".
+- Information gathering is NOT the deliverable. For research/explanation tasks the agent must actually deliver a SYNTHESIZED answer. A session full of Read/Grep/Glob that ends with the agent organizing its findings into a real answer IS resolved (advisory); one that ends WITHOUT ever answering is "partially_resolved" (found info, never answered) or "unresolved" (never answered) — the gap is the missing answer, not the missing user-confirmation.
 - A session that only has a single user message with no agent response is "indeterminate".
 
 Pay special attention to the "How the session ends" section below — it is the strongest signal for whether the task actually finished.
 
 Respond in valid JSON only:
-{"label": "<one of: resolved, partially_resolved, unresolved, indeterminate>", "reason": "<1-2 sentence explanation>"}"""
+{"label": "<one of: resolved, unverified, partially_resolved, unresolved, indeterminate>", "reason": "<1-2 sentence explanation>"}"""
 
 
 def _summarize(it: Item, max_chars: int = 150) -> str:
@@ -203,6 +215,7 @@ def build(unit: list, ctx: list) -> list[dict]:
 
 _LABEL_MAP = {
     "resolved": "resolved",
+    "unverified": "unverified",
     "partially_resolved": "partially_resolved",
     "unresolved": "unresolved",
     "indeterminate": "indeterminate",
