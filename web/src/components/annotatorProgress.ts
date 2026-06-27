@@ -11,6 +11,10 @@ function jobTime(job: JobInfo): number {
   return job.created_at ? new Date(job.created_at).getTime() || 0 : 0;
 }
 
+function jobUpdateTime(job: JobInfo): number {
+  return job.updated_at ? new Date(job.updated_at).getTime() || 0 : jobTime(job);
+}
+
 export function jobErrCount(job: JobInfo): number {
   if (!job.errors) return 0;
   try { return JSON.parse(job.errors).length; } catch { return 0; }
@@ -65,14 +69,22 @@ export function formatJobLabel(job: JobInfo): { text: string; color: string } {
 }
 
 export function keepLatestJobsByAnnotator(jobs: JobInfo[]): JobInfo[] {
-  const latest = new Map<string, JobInfo>();
+  const byId = new Map<string, JobInfo>();
   for (const job of jobs) {
+    const cur = byId.get(job.job_id);
+    if (!cur || jobUpdateTime(job) >= jobUpdateTime(cur)) {
+      byId.set(job.job_id, job);
+    }
+  }
+
+  const latest = new Map<string, JobInfo>();
+  for (const job of byId.values()) {
     const cur = latest.get(job.annotator_id);
     if (!cur || !job.created_at || !cur.created_at || jobTime(job) >= jobTime(cur)) {
       latest.set(job.annotator_id, job);
     }
   }
-  return jobs.filter((job) => latest.get(job.annotator_id)?.job_id === job.job_id);
+  return [...byId.values()].filter((job) => latest.get(job.annotator_id)?.job_id === job.job_id);
 }
 
 export function summarizeAnnotatorProgress(activeJobs: JobInfo[]): AnnotatorProgressSummary {

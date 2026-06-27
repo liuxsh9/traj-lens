@@ -61,6 +61,14 @@ const withFreshPending = keepLatestJobsByAnnotator([
 
 assert.deepEqual(withFreshPending.map((j) => j.job_id), ["fresh"]);
 
+const repeatedSameJob = keepLatestJobsByAnnotator([
+  job({ job_id: "same", annotator_id: "topic", status: "pending", created_at: "2026-06-26T12:23:00Z" }),
+  job({ job_id: "same", annotator_id: "topic", status: "done", done: 9, created_at: "2026-06-26T12:23:00Z", updated_at: "2026-06-26T12:24:00Z" }),
+]);
+
+assert.deepEqual(repeatedSameJob.map((j) => j.job_id), ["same"]);
+assert.equal(repeatedSameJob[0].status, "done");
+
 assert.deepEqual(formatJobLabel(job({ status: "pending" })), {
   text: "preparing targets…",
   color: "var(--warn)",
