@@ -74,6 +74,60 @@ def test_resolution_ending_shows_completion():
     assert "still working" not in prompt
 
 
+def test_resolution_ending_includes_final_reasoning_with_fixed_budget():
+    from trajlens.annotate.llm import resolution
+    from trajlens.core.model import ReasoningItem
+
+    reasoning = (
+        "I reviewed the final diff, checked the parser paths, and compared the "
+        "edge cases against the requested behavior. I finished the implementation "
+        "and all tests pass. "
+        + "r" * 700
+    )
+    visible = "```python\n" + ("print('ok')\n" * 120) + "```"
+    items = [
+        MessageItem(role="user", content="add a parser"),
+        ReasoningItem(content=reasoning),
+        MessageItem(role="assistant", content=visible),
+    ]
+
+    prompt = resolution.build(items, items)[-1]["content"]
+    detail = prompt.split("Last assistant reasoning/message detail:\n", 1)[1].split(
+        "\n\nClassify the resolution status", 1)[0]
+    ending_line = "Last assistant reasoning/message detail:\n" + detail
+
+    assert "I finished the implementation and all tests pass." in prompt
+    assert "Last assistant reasoning/message detail:" in prompt
+    assert len(ending_line) <= len("Last assistant message (verbatim):\n") + 801
+
+
+def test_resolution_long_session_prioritizes_recent_evidence():
+    """For long sessions, keep total transcript lines fixed but bias them toward
+    final turns where tests and wrap-up evidence usually appear."""
+    from trajlens.annotate.llm import resolution
+
+    items = []
+    for i in range(35):
+        items.append(MessageItem(role="user" if i % 2 == 0 else "assistant",
+                                 content=f"early/middle item {i}"))
+    items.extend([
+        FunctionCallItem(name="pytest", arguments='{"cmd":"uv run pytest"}', call_id="test"),
+        FunctionCallOutputItem(call_id="test", output="42 passed"),
+        MessageItem(role="assistant", content="Implemented the fix and all tests pass."),
+    ])
+
+    prompt = resolution.build(items, items)[-1]["content"]
+    transcript = prompt.split("Full session transcript:\n", 1)[1].split(
+        "\n\nHow the session ends:", 1)[0]
+    lines = [line for line in transcript.splitlines() if line and not line.startswith("[...")]
+
+    assert len(lines) == 25
+    assert "early/middle item 6" not in transcript
+    assert "pytest" in transcript
+    assert "42 passed" in transcript
+    assert "Implemented the fix and all tests pass." in transcript
+
+
 def test_resolution_flags_search_only_pattern():
     """Sample 003263a2 shape: a research question answered only with tool calls
     and short 'let me read X' transitions, never a synthesized answer."""

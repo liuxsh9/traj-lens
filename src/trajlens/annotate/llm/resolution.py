@@ -30,6 +30,7 @@ Categories (choose exactly one):
 
 Guidelines:
 - Focus on the OUTCOME, not the process. A messy path that ends with working code is "resolved".
+- Weight the final turns most heavily. Look for the final answer/conclusion and the nearest preceding tool evidence, especially tests/builds/checks that passed or failed.
 - Multiple user corrections followed by eventual success = "resolved" (the corrections helped).
 - CRITICAL — do not over-credit in-progress work. If the final assistant turn announces or is about to do more work ("next, I'll…", "now let me…", "let me continue…", "I'll start by…"), or the session ends on a pending tool call / tool output with no concluding wrap-up, the task is NOT finished → choose "partially_resolved" (clear progress) or "indeterminate" (cut short), NEVER "resolved".
 - "resolved" demands an affirmative end state, not merely the lack of a visible failure.
@@ -55,6 +56,52 @@ def _summarize(it: Item, max_chars: int = 150) -> str:
     return ""
 
 
+_FINAL_DETAIL_HEADER = "Last assistant reasoning/message detail:\n"
+_OLD_FINAL_DETAIL_HEADER = "Last assistant message (verbatim):\n"
+# Keep the old ending-detail block's maximum size: old header + 800 chars.
+_OLD_FINAL_DETAIL_TOTAL = len(_OLD_FINAL_DETAIL_HEADER) + 800
+_FINAL_DETAIL_BUDGET = _OLD_FINAL_DETAIL_TOTAL - len(_FINAL_DETAIL_HEADER)
+
+
+def _clip(text: str, max_chars: int) -> str:
+    if max_chars <= 0:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    if max_chars == 1:
+        return "…"
+    return text[:max_chars - 1] + "…"
+
+
+def _final_detail(last_reasoning: str | None, last_asst: str | None) -> str:
+    """Fit final reasoning + visible answer into the old 800-char ending budget."""
+    parts: list[tuple[str, str]] = []
+    if last_reasoning:
+        parts.append(("Reasoning: ", last_reasoning))
+    if last_asst:
+        parts.append(("Message: ", last_asst))
+    if not parts:
+        return "No assistant message present."
+
+    if len(parts) == 1:
+        prefix, text = parts[0]
+        return prefix + _clip(text, _FINAL_DETAIL_BUDGET - len(prefix))
+
+    reasoning_prefix, reasoning = parts[0]
+    message_prefix, message = parts[1]
+    sep = "\n"
+    fixed = len(reasoning_prefix) + len(message_prefix) + len(sep)
+    text_budget = max(0, _FINAL_DETAIL_BUDGET - fixed)
+    # Split the fixed budget so reasoning can carry hidden conclusions while the
+    # visible final answer still shows whether it is a code block or wrap-up.
+    reasoning_budget = min(len(reasoning), max(240, text_budget // 2))
+    message_budget = text_budget - reasoning_budget
+    return (
+        reasoning_prefix + _clip(reasoning, reasoning_budget) + sep
+        + message_prefix + _clip(message, message_budget)
+    )
+
+
 def _ending_signal(unit: list) -> str:
     """Describe how the session ends — the key signal for whether it finished.
 
@@ -65,6 +112,8 @@ def _ending_signal(unit: list) -> str:
     last_item = next((it for it in reversed(unit) if _summarize(it)), None)
     last_asst = next((it.content for it in reversed(unit)
                       if it.type == "message" and it.role == "assistant"), None)
+    last_reasoning = next((it.content for it in reversed(unit)
+                           if it.type == "reasoning"), None)
 
     # "search-only / never-answers" fingerprint: many tool calls but no
     # substantive assistant message. 200 chars ≈ a real synthesized answer vs a
@@ -88,12 +137,7 @@ def _ending_signal(unit: list) -> str:
             f"⚠ Search-only pattern: {tool_calls} tool calls but the longest "
             f"assistant message is only {longest_asst} chars — the agent gathered "
             f"information but may never have synthesized an answer for the user.")
-    if last_asst:
-        # ponytail: 800 chars is enough to see "done" vs "next I'll…"; stays well under payload budget
-        text = last_asst[:800] + ("…" if len(last_asst) > 800 else "")
-        lines.append(f"Last assistant message (verbatim):\n{text}")
-    else:
-        lines.append("No assistant message present.")
+    lines.append(_FINAL_DETAIL_HEADER + _final_detail(last_reasoning, last_asst))
     return "\n".join(lines)
 
 
@@ -103,8 +147,8 @@ def build(unit: list, ctx: list) -> list[dict]:
     summaries = [_summarize(it) for it in unit if _summarize(it)]
 
     if len(summaries) > 30:
-        head = summaries[:10]
-        tail = summaries[-15:]
+        head = summaries[:6]
+        tail = summaries[-19:]
         body = "\n".join(head) + f"\n\n[... {len(summaries) - 25} items omitted ...]\n\n" + "\n".join(tail)
     else:
         body = "\n".join(summaries)
