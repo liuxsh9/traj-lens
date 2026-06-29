@@ -127,7 +127,7 @@ export function buildLoopEpisodes(
       if (prev) {
         const prevIdx = order.get(prev.key) ?? 0;
         const curIdx = order.get(point.key) ?? prevIdx;
-        if (curIdx - prevIdx > gapSteps) flush();
+        if (point.runId !== prev.runId || curIdx - prevIdx > gapSteps) flush();
       }
       burst.push(point);
     }
