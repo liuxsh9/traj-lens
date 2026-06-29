@@ -70,3 +70,8 @@ export function minimapMarkerClass(marker: StepErrorMarker | null): string {
   if (!marker) return "";
   return marker.kind === "recovered" ? "flag-recovered" : "flag-error";
 }
+
+export function markerBadgeText(marker: StepErrorMarker | null): string {
+  if (!marker) return "";
+  return marker.recovered === true ? "ERR+REC" : "ERR";
+}

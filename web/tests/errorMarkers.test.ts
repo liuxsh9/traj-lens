@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import type { Annotation, Item } from "../src/api";
 import {
   buildStepErrorMarkers,
+  markerBadgeText,
   markerForItem,
   minimapMarkerClass,
 } from "../src/components/errorMarkers";
@@ -58,6 +59,8 @@ assert.equal(markerForItem(item(2, 1), markers), null);
 assert.equal(minimapMarkerClass(null), "");
 assert.equal(minimapMarkerClass(markers.get("0-0") ?? null), "flag-error");
 assert.equal(minimapMarkerClass(markers.get("0-1") ?? null), "flag-recovered");
+assert.equal(markerBadgeText(markers.get("0-0") ?? null), "ERR");
+assert.equal(markerBadgeText(markers.get("0-1") ?? null), "ERR+REC");
 
 const multiRunMarkers = buildStepErrorMarkers([
   ann(0, { has_error: true, recovered: false }),

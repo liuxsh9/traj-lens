@@ -1,6 +1,6 @@
 import { type Item, type Annotation, groupByTurns, groupBySteps, parseAnnotationValue } from "../api";
 import { ItemTranscript } from "./ItemTranscript";
-import { stepMarkerKey, type StepErrorMarker } from "./errorMarkers";
+import { markerBadgeText, stepMarkerKey, type StepErrorMarker } from "./errorMarkers";
 
 interface Props {
   items: Item[];
@@ -132,7 +132,7 @@ function StepCard({
               className={`chip-sm err-chip ${marker.kind}`}
               title={marker.summary ?? (marker.kind === "recovered" ? "error recovered" : "tool error")}
             >
-              {marker.kind === "recovered" ? "REC" : "ERR"}
+              {markerBadgeText(marker)}
             </span>
           )}
           <span className="caret">{isExpanded ? "▾" : "▸"}</span>

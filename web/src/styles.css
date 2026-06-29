@@ -449,7 +449,18 @@ table.list {
 }
 .tick .flag-pushback { border-left-color: var(--bad); }
 .tick .flag-error { border-left-color: var(--bad); }
-.tick .flag-recovered { border-left-color: var(--good); }
+.tick .flag-recovered {
+  border-left-color: var(--good);
+}
+.tick .flag-recovered::after {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -2px;
+  width: 0; height: 0;
+  border: 2px solid transparent;
+  border-left-color: var(--bad);
+}
 .viewbox {
   position: absolute;
   left: 3px; right: 3px;
@@ -500,6 +511,7 @@ table.list {
 .err-chip.recovered {
   background: #e8f5ed;
   color: var(--good);
+  border-left: 3px solid var(--bad);
 }
 /* Pinned bookend cards (task prompt + final reply) */
 .pinned {
