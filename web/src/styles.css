@@ -464,6 +464,21 @@ table.list {
   border: 2px solid transparent;
   border-left-color: var(--bad);
 }
+.tick .loop-mini {
+  position: absolute;
+  right: -11px;
+  top: -1px;
+  bottom: -1px;
+  width: 3px;
+  background: #c78a22;
+  opacity: .9;
+}
+.tick .loop-mini.flag-loop-start {
+  border-radius: 3px 3px 0 0;
+}
+.tick .loop-mini.flag-loop-end {
+  border-radius: 0 0 3px 3px;
+}
 .viewbox {
   position: absolute;
   left: 3px; right: 3px;
@@ -488,6 +503,7 @@ table.list {
   border-radius: var(--radius);
   background: var(--panel);
   flex-shrink: 0;
+  position: relative;
 }
 .card.user-card {
   background: #f4f7fb;
@@ -505,6 +521,63 @@ table.list {
 }
 .card.error-step.error-recovered {
   border-left-color: var(--warn);
+}
+.card.loop-step {
+  padding-left: 14px;
+}
+.loop-lanes {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+}
+.loop-lane {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 3px;
+  background: #c78a22;
+  opacity: .88;
+  pointer-events: auto;
+}
+.loop-lane.loop-start {
+  border-radius: 4px 4px 0 0;
+}
+.loop-lane.loop-trigger {
+  background: #b87016;
+}
+.loop-lane.loop-trigger::after,
+.loop-lane.loop-single::after {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 14px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #b87016;
+  border: 2px solid var(--panel);
+}
+.loop-lane.loop-end {
+  border-radius: 0 0 4px 4px;
+}
+.loop-lane.loop-single {
+  border-radius: 4px;
+}
+.loop-lane-more {
+  position: absolute;
+  left: 24px;
+  top: 6px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: #9c620f;
+}
+.loop-chip {
+  background: #fff4df;
+  color: #9c620f;
+  border: 1px solid #e3b765;
+  font-weight: 700;
 }
 .err-chip {
   font-weight: 700;

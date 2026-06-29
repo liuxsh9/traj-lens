@@ -1,11 +1,20 @@
 import { type Item, type Annotation, groupByTurns, groupBySteps, parseAnnotationValue } from "../api";
 import { ItemTranscript } from "./ItemTranscript";
 import { markerBadgeText, stepMarkerKey, type StepErrorMarker } from "./errorMarkers";
+import {
+  loopEpisodeLabel,
+  loopEpisodeTitle,
+  loopMarkersForStep,
+  loopStepRole,
+  type LoopEpisode,
+  type LoopStepMarker,
+} from "./loopMarkers";
 
 interface Props {
   items: Item[];
   annotations: Annotation[];
   errorMarkers: Map<string, StepErrorMarker>;
+  loopEpisodes: LoopEpisode[];
   expanded: Set<string>;
   onToggle: (key: string) => void;
 }
@@ -49,6 +58,10 @@ function markerTooltip(marker: StepErrorMarker | null): string {
     parts.push("recovery action");
   }
   return parts.join(" | ");
+}
+
+function loopMarkerTooltip(marker: LoopStepMarker): string {
+  return loopEpisodeTitle(marker.episode);
 }
 
 // Build a map: user-message-index → pushback annotation (for active pushbacks only)
@@ -120,6 +133,7 @@ function StepCard({
   runId,
   stepId,
   marker,
+  loopMarkers,
   isExpanded,
   onToggle,
 }: {
@@ -127,6 +141,7 @@ function StepCard({
   runId: number;
   stepId: number;
   marker: StepErrorMarker | null;
+  loopMarkers: LoopStepMarker[];
   isExpanded: boolean;
   onToggle: () => void;
 }) {
@@ -141,13 +156,44 @@ function StepCard({
       : ""
     : "";
   const markerTitle = markerTooltip(marker);
+  const stepKeyValue = stepKey(runId, stepId);
+  const triggerLoops = loopMarkers.filter((m) => m.episode.triggerKey === stepKeyValue);
+  const visibleLoopLanes = loopMarkers.slice(0, 3);
+  const extraLoopCount = Math.max(0, loopMarkers.length - visibleLoopLanes.length);
 
   return (
-    <div className={`card ${markerClass}`}>
+    <div className={`card ${markerClass} ${loopMarkers.length ? "loop-step" : ""}`}>
+      {visibleLoopLanes.length > 0 && (
+        <div className="loop-lanes" aria-hidden="true">
+          {visibleLoopLanes.map((lm, laneIdx) => (
+            <span
+              key={`${lm.episode.id}-${laneIdx}`}
+              className={`loop-lane loop-${loopStepRole(lm.episode, stepKeyValue) ?? lm.role}`}
+              style={{ left: 8 + laneIdx * 5 }}
+              title={loopMarkerTooltip(lm)}
+            />
+          ))}
+          {extraLoopCount > 0 && <span className="loop-lane-more">+{extraLoopCount}</span>}
+        </div>
+      )}
       <div className="chd" onClick={onToggle}>
         <span className="actor">🤖</span>
         <span className="summ">{summary}</span>
         <span className="meta">
+          {triggerLoops.slice(0, 2).map((lm) => (
+            <span
+              key={lm.episode.id}
+              className="chip-sm loop-chip"
+              title={loopMarkerTooltip(lm)}
+            >
+              LOOP · {loopEpisodeLabel(lm.episode)}
+            </span>
+          ))}
+          {triggerLoops.length > 2 && (
+            <span className="chip-sm loop-chip" title={`${triggerLoops.length} loops trigger here`}>
+              +{triggerLoops.length - 2}
+            </span>
+          )}
           {marker && (
             <span
               className={`chip-sm err-chip ${markerClass}`}
@@ -173,12 +219,14 @@ function RunGroup({
   runId,
   items,
   errorMarkers,
+  loopEpisodes,
   expanded,
   onToggle,
 }: {
   runId: number;
   items: Item[];
   errorMarkers: Map<string, StepErrorMarker>;
+  loopEpisodes: LoopEpisode[];
   expanded: Set<string>;
   onToggle: (key: string) => void;
 }) {
@@ -201,6 +249,7 @@ function RunGroup({
           {steps.map((sg) => {
             const k = stepKey(sg.run_id, sg.step_id);
             const marker = errorMarkers.get(stepMarkerKey(sg.run_id, sg.step_id)) ?? null;
+            const loopMarkers = loopMarkersForStep(k, loopEpisodes);
             return (
               <StepCard
                 key={k}
@@ -208,6 +257,7 @@ function RunGroup({
                 runId={sg.run_id}
                 stepId={sg.step_id}
                 marker={marker}
+                loopMarkers={loopMarkers}
                 isExpanded={expanded.has(k)}
                 onToggle={() => onToggle(k)}
               />
@@ -275,7 +325,7 @@ export function PinnedReply({ items, isExpanded, onToggle }: {
 }
 
 // ── CardStack (all turns) ──
-export function CardStack({ items, annotations, errorMarkers, expanded, onToggle }: Props) {
+export function CardStack({ items, annotations, errorMarkers, loopEpisodes, expanded, onToggle }: Props) {
   const turns = groupByTurns(items);
   const pbMap = buildPushbackMap(annotations);
   const intentMap = buildIntentMap(annotations);
@@ -318,6 +368,7 @@ export function CardStack({ items, annotations, errorMarkers, expanded, onToggle
             runId={t.run_id!}
             items={t.items}
             errorMarkers={errorMarkers}
+            loopEpisodes={loopEpisodes}
             expanded={expanded}
             onToggle={onToggle}
           />

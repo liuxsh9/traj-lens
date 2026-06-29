@@ -1,11 +1,13 @@
 import { useRef, useCallback } from "react";
 import type { Item } from "../api";
 import { markerForItem, minimapMarkerClass, type StepErrorMarker } from "./errorMarkers";
+import { minimapLoopClass, stepKey, type LoopEpisode } from "./loopMarkers";
 
 interface Props {
   items: Item[];
   pushbackIndices: Set<number>;
   errorMarkers: Map<string, StepErrorMarker>;
+  loopEpisodes: LoopEpisode[];
   viewportTop: number;
   viewportHeight: number;
   onClickTick: (index: number) => void;
@@ -26,6 +28,7 @@ interface AggTick {
   key: string;
   cls: string;
   flagClass: string;
+  loopClass: string;
   startIdx: number;
 }
 
@@ -33,6 +36,7 @@ function aggregateByStep(
   items: Item[],
   pbSet: Set<number>,
   errorMarkers: Map<string, StepErrorMarker>,
+  loopEpisodes: LoopEpisode[],
 ): AggTick[] {
   const ticks: AggTick[] = [];
   let cur: AggTick | null = null;
@@ -40,21 +44,24 @@ function aggregateByStep(
     const it = items[i];
     const key = it.run_id === null ? `u-${i}` : `${it.run_id}-${it.step_id}`;
     if (!cur || cur.key !== key) {
-      cur = { key, cls: tickClass(it), flagClass: "", startIdx: i };
+      cur = { key, cls: tickClass(it), flagClass: "", loopClass: "", startIdx: i };
       ticks.push(cur);
     }
     const errClass = minimapMarkerClass(markerForItem(it, errorMarkers));
     if (errClass) cur.flagClass = errClass;
     else if (!cur.flagClass && pbSet.has(i)) cur.flagClass = "flag-pushback";
+    if (it.run_id != null && it.step_id != null) {
+      cur.loopClass ||= minimapLoopClass(stepKey(it.run_id, it.step_id), loopEpisodes);
+    }
   }
   return ticks;
 }
 
-export function Minimap({ items, pushbackIndices, errorMarkers, viewportTop, viewportHeight, onClickTick }: Props) {
+export function Minimap({ items, pushbackIndices, errorMarkers, loopEpisodes, viewportTop, viewportHeight, onClickTick }: Props) {
   const ticksRef = useRef<HTMLDivElement>(null);
 
   const aggregate = items.length > 200;
-  const ticks = aggregate ? aggregateByStep(items, pushbackIndices, errorMarkers) : null;
+  const ticks = aggregate ? aggregateByStep(items, pushbackIndices, errorMarkers, loopEpisodes) : null;
   const count = ticks ? ticks.length : items.length;
   // ponytail: no gap when dense (>80 ticks), 1px otherwise
   const gap = count > 80 ? 0 : 1;
@@ -78,6 +85,7 @@ export function Minimap({ items, pushbackIndices, errorMarkers, viewportTop, vie
                 onClick={() => handleClick(t.startIdx)}
               >
                 {t.flagClass && <span className={`flag ${t.flagClass}`} />}
+                {t.loopClass && <span className={`loop-mini ${t.loopClass}`} />}
               </div>
             ))
           : items.map((it, i) => (
@@ -89,7 +97,15 @@ export function Minimap({ items, pushbackIndices, errorMarkers, viewportTop, vie
                 {(() => {
                   const flagClass = minimapMarkerClass(markerForItem(it, errorMarkers))
                     || (pushbackIndices.has(i) ? "flag-pushback" : "");
-                  return flagClass ? <span className={`flag ${flagClass}`} /> : null;
+                  const loopClass = it.run_id != null && it.step_id != null
+                    ? minimapLoopClass(stepKey(it.run_id, it.step_id), loopEpisodes)
+                    : "";
+                  return (
+                    <>
+                      {flagClass ? <span className={`flag ${flagClass}`} /> : null}
+                      {loopClass ? <span className={`loop-mini ${loopClass}`} /> : null}
+                    </>
+                  );
                 })()}
               </div>
             ))}

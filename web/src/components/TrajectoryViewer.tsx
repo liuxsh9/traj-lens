@@ -7,6 +7,7 @@ import { CardStack, PinnedUser, PinnedReply } from "./CardStack";
 import { TrimBar } from "./TrimBar";
 import { ChangesPanel } from "./ChangesPanel";
 import { buildStepErrorMarkers } from "./errorMarkers";
+import { buildLoopEpisodes } from "./loopMarkers";
 
 export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () => void }) {
   const { data: traj, error, isLoading } = useQuery({
@@ -109,6 +110,11 @@ export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () =>
     return buildStepErrorMarkers(traj.annotations, traj.items);
   }, [traj]);
 
+  const loopEpisodes = useMemo(() => {
+    if (!traj) return [];
+    return buildLoopEpisodes(traj.code_changes ?? [], traj.items);
+  }, [traj]);
+
   // ── Click minimap tick → scroll cards ──
   const onClickTick = useCallback((index: number) => {
     // Approximate: scroll the card container proportionally
@@ -175,6 +181,7 @@ export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () =>
             items={traj.items}
             pushbackIndices={pushbackIndices}
             errorMarkers={errorMarkers}
+            loopEpisodes={loopEpisodes}
             viewportTop={vpTop}
             viewportHeight={vpHeight}
             onClickTick={onClickTick}
@@ -184,6 +191,7 @@ export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () =>
               items={traj.items}
               annotations={traj.annotations ?? []}
               errorMarkers={errorMarkers}
+              loopEpisodes={loopEpisodes}
               expanded={expanded}
               onToggle={onToggle}
             />
