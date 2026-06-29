@@ -99,7 +99,7 @@ export function minimapMarkerClass(marker: StepErrorMarker | null): string {
 
 export function markerBadgeText(marker: StepErrorMarker | null): string {
   if (!marker) return "";
-  if (marker.hasError && marker.hasRecovery) return "ERR+REC";
+  if (marker.hasError && marker.hasRecovery) return "REC→ERR";
   if (marker.hasError) return "ERR";
   return marker.hasRecovery ? "REC" : "";
 }

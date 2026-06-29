@@ -95,7 +95,7 @@ const chainedMarkers = buildStepErrorMarkers([
   item(0, 3),
 ]);
 
-assert.equal(markerBadgeText(chainedMarkers.get("0-2") ?? null), "ERR+REC");
+assert.equal(markerBadgeText(chainedMarkers.get("0-2") ?? null), "REC→ERR");
 assert.equal(minimapMarkerClass(chainedMarkers.get("0-2") ?? null), "flag-error-recovered");
 assert.equal(chainedMarkers.get("0-2")?.errorSummary, "second failure");
 assert.equal(chainedMarkers.get("0-2")?.recoverySummary, "first failure");
