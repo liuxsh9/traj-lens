@@ -504,7 +504,7 @@ table.list {
   border-left: 3px solid var(--good);
 }
 .card.error-step.error-recovered {
-  border-left-color: var(--good);
+  border-left-color: var(--warn);
 }
 .err-chip {
   font-weight: 700;
@@ -519,9 +519,9 @@ table.list {
   color: var(--good);
 }
 .err-chip.error-step.error-recovered {
-  background: #e8f5ed;
-  color: var(--good);
-  border-left: 3px solid var(--bad);
+  background: #fff4e7;
+  color: var(--warn);
+  border-left: 4px solid var(--good);
 }
 /* Pinned bookend cards (task prompt + final reply) */
 .pinned {
