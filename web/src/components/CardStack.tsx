@@ -1,9 +1,11 @@
 import { type Item, type Annotation, groupByTurns, groupBySteps, parseAnnotationValue } from "../api";
 import { ItemTranscript } from "./ItemTranscript";
+import { stepMarkerKey, type StepErrorMarker } from "./errorMarkers";
 
 interface Props {
   items: Item[];
   annotations: Annotation[];
+  errorMarkers: Map<string, StepErrorMarker>;
   expanded: Set<string>;
   onToggle: (key: string) => void;
 }
@@ -103,12 +105,14 @@ function StepCard({
   items,
   runId,
   stepId,
+  marker,
   isExpanded,
   onToggle,
 }: {
   items: Item[];
   runId: number;
   stepId: number;
+  marker: StepErrorMarker | null;
   isExpanded: boolean;
   onToggle: () => void;
 }) {
@@ -118,11 +122,19 @@ function StepCard({
     : summarizeStep(items);
 
   return (
-    <div className="card">
+    <div className={`card ${marker ? `error-step ${marker.kind}` : ""}`}>
       <div className="chd" onClick={onToggle}>
         <span className="actor">🤖</span>
         <span className="summ">{summary}</span>
         <span className="meta">
+          {marker && (
+            <span
+              className={`chip-sm err-chip ${marker.kind}`}
+              title={marker.summary ?? (marker.kind === "recovered" ? "error recovered" : "tool error")}
+            >
+              {marker.kind === "recovered" ? "REC" : "ERR"}
+            </span>
+          )}
           <span className="caret">{isExpanded ? "▾" : "▸"}</span>
         </span>
       </div>
@@ -139,11 +151,13 @@ function StepCard({
 function RunGroup({
   runId,
   items,
+  errorMarkers,
   expanded,
   onToggle,
 }: {
   runId: number;
   items: Item[];
+  errorMarkers: Map<string, StepErrorMarker>;
   expanded: Set<string>;
   onToggle: (key: string) => void;
 }) {
@@ -165,12 +179,14 @@ function RunGroup({
         <div className="run-steps">
           {steps.map((sg) => {
             const k = stepKey(sg.run_id, sg.step_id);
+            const marker = errorMarkers.get(stepMarkerKey(sg.run_id, sg.step_id)) ?? null;
             return (
               <StepCard
                 key={k}
                 items={sg.items}
                 runId={sg.run_id}
                 stepId={sg.step_id}
+                marker={marker}
                 isExpanded={expanded.has(k)}
                 onToggle={() => onToggle(k)}
               />
@@ -238,7 +254,7 @@ export function PinnedReply({ items, isExpanded, onToggle }: {
 }
 
 // ── CardStack (all turns) ──
-export function CardStack({ items, annotations, expanded, onToggle }: Props) {
+export function CardStack({ items, annotations, errorMarkers, expanded, onToggle }: Props) {
   const turns = groupByTurns(items);
   const pbMap = buildPushbackMap(annotations);
   const intentMap = buildIntentMap(annotations);
@@ -280,6 +296,7 @@ export function CardStack({ items, annotations, expanded, onToggle }: Props) {
             key={`r-${t.run_id}`}
             runId={t.run_id!}
             items={t.items}
+            errorMarkers={errorMarkers}
             expanded={expanded}
             onToggle={onToggle}
           />

@@ -6,6 +6,7 @@ import { Minimap } from "./Minimap";
 import { CardStack, PinnedUser, PinnedReply } from "./CardStack";
 import { TrimBar } from "./TrimBar";
 import { ChangesPanel } from "./ChangesPanel";
+import { buildStepErrorMarkers } from "./errorMarkers";
 
 export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () => void }) {
   const { data: traj, error, isLoading } = useQuery({
@@ -103,6 +104,11 @@ export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () =>
     return set;
   }, [traj]);
 
+  const errorMarkers = useMemo(() => {
+    if (!traj?.annotations) return new Map();
+    return buildStepErrorMarkers(traj.annotations, traj.items);
+  }, [traj]);
+
   // ── Click minimap tick → scroll cards ──
   const onClickTick = useCallback((index: number) => {
     // Approximate: scroll the card container proportionally
@@ -168,6 +174,7 @@ export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () =>
           <Minimap
             items={traj.items}
             pushbackIndices={pushbackIndices}
+            errorMarkers={errorMarkers}
             viewportTop={vpTop}
             viewportHeight={vpHeight}
             onClickTick={onClickTick}
@@ -176,6 +183,7 @@ export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () =>
             <CardStack
               items={traj.items}
               annotations={traj.annotations ?? []}
+              errorMarkers={errorMarkers}
               expanded={expanded}
               onToggle={onToggle}
             />
