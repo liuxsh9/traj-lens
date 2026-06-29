@@ -1,15 +1,15 @@
 import { parseAnnotationValue, type Annotation, type Item } from "../api";
 
-export type ErrorMarkerKind = "error" | "recovered";
-
 export interface StepErrorMarker {
   key: string;
   runId: number;
   stepId: number;
-  kind: ErrorMarkerKind;
   hasError: boolean;
-  recovered: boolean | null;
-  summary: string | null;
+  hasRecovery: boolean;
+  recoveredFromKey: string | null;
+  recoversKey: string | null;
+  errorSummary: string | null;
+  recoverySummary: string | null;
 }
 
 export function stepMarkerKey(runId: number, stepId: number): string {
@@ -36,6 +36,25 @@ function enumerateStepKeys(items: Item[]): string[] {
 export function buildStepErrorMarkers(annotations: Annotation[], items: Item[] = []): Map<string, StepErrorMarker> {
   const map = new Map<string, StepErrorMarker>();
   const stepKeys = enumerateStepKeys(items);
+  const ensureMarker = (key: string): StepErrorMarker => {
+    const existing = map.get(key);
+    if (existing) return existing;
+    const [runId, stepId] = key.split("-").map((n) => Number(n));
+    const marker: StepErrorMarker = {
+      key,
+      runId,
+      stepId,
+      hasError: false,
+      hasRecovery: false,
+      recoveredFromKey: null,
+      recoversKey: null,
+      errorSummary: null,
+      recoverySummary: null,
+    };
+    map.set(key, marker);
+    return marker;
+  };
+
   for (const a of annotations) {
     if (a.annotator_id !== "error_recovery" || a.target_type !== "step") continue;
     if (a.target_idx == null) continue;
@@ -48,15 +67,20 @@ export function buildStepErrorMarkers(annotations: Annotation[], items: Item[] =
       : [typeof v.run_id === "number" ? v.run_id : 0, a.target_idx];
     const recovered = v.recovered === true ? true : v.recovered === false ? false : null;
     const key = stepMarkerKey(runId, stepId);
-    map.set(key, {
-      key,
-      runId,
-      stepId,
-      kind: recovered === true ? "recovered" : "error",
-      hasError: true,
-      recovered,
-      summary: typeof v.error_summary === "string" && v.error_summary ? v.error_summary : null,
-    });
+    const marker = ensureMarker(key);
+    marker.hasError = true;
+    marker.errorSummary = typeof v.error_summary === "string" && v.error_summary ? v.error_summary : marker.errorSummary;
+
+    if (recovered === true) {
+      const recoveryKey = stepKeys[a.target_idx + 1];
+      marker.recoversKey = recoveryKey ?? null;
+      if (recoveryKey) {
+        const recoveryMarker = ensureMarker(recoveryKey);
+        recoveryMarker.hasRecovery = true;
+        recoveryMarker.recoveredFromKey = key;
+        recoveryMarker.recoverySummary = marker.errorSummary;
+      }
+    }
   }
   return map;
 }
@@ -68,10 +92,14 @@ export function markerForItem(item: Item, markers: Map<string, StepErrorMarker>)
 
 export function minimapMarkerClass(marker: StepErrorMarker | null): string {
   if (!marker) return "";
-  return marker.kind === "recovered" ? "flag-recovered" : "flag-error";
+  if (marker.hasError && marker.hasRecovery) return "flag-error-recovered";
+  if (marker.hasError) return "flag-error";
+  return marker.hasRecovery ? "flag-recovered" : "";
 }
 
 export function markerBadgeText(marker: StepErrorMarker | null): string {
   if (!marker) return "";
-  return marker.recovered === true ? "ERR+REC" : "ERR";
+  if (marker.hasError && marker.hasRecovery) return "ERR+REC";
+  if (marker.hasError) return "ERR";
+  return marker.hasRecovery ? "REC" : "";
 }

@@ -37,6 +37,20 @@ function toolFootprint(items: Item[]): string[] {
   return names;
 }
 
+function markerTooltip(marker: StepErrorMarker | null): string {
+  if (!marker) return "";
+  const parts: string[] = [];
+  if (marker.hasError) {
+    parts.push(marker.errorSummary ? `error: ${marker.errorSummary}` : "error");
+  }
+  if (marker.hasRecovery && marker.recoveredFromKey) {
+    parts.push(`recovers ${marker.recoveredFromKey}${marker.recoverySummary ? `: ${marker.recoverySummary}` : ""}`);
+  } else if (marker.hasRecovery) {
+    parts.push("recovery action");
+  }
+  return parts.join(" | ");
+}
+
 // Build a map: user-message-index → pushback annotation (for active pushbacks only)
 // ponytail: skip target_idx=0 — first user message can't be pushback (no prior agent action)
 function buildPushbackMap(annotations: Annotation[]): Map<number, Annotation> {
@@ -120,17 +134,24 @@ function StepCard({
   const summary = tools.length
     ? tools.join(" → ")
     : summarizeStep(items);
+  const markerClass = marker
+    ? marker.hasError && marker.hasRecovery ? "error-step error-recovered"
+      : marker.hasError ? "error-step error"
+      : marker.hasRecovery ? "recovery-step"
+      : ""
+    : "";
+  const markerTitle = markerTooltip(marker);
 
   return (
-    <div className={`card ${marker ? `error-step ${marker.kind}` : ""}`}>
+    <div className={`card ${markerClass}`}>
       <div className="chd" onClick={onToggle}>
         <span className="actor">🤖</span>
         <span className="summ">{summary}</span>
         <span className="meta">
           {marker && (
             <span
-              className={`chip-sm err-chip ${marker.kind}`}
-              title={marker.summary ?? (marker.kind === "recovered" ? "error recovered" : "tool error")}
+              className={`chip-sm err-chip ${markerClass}`}
+              title={markerTitle}
             >
               {markerBadgeText(marker)}
             </span>

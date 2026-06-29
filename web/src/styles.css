@@ -452,7 +452,10 @@ table.list {
 .tick .flag-recovered {
   border-left-color: var(--good);
 }
-.tick .flag-recovered::after {
+.tick .flag-error-recovered {
+  border-left-color: var(--good);
+}
+.tick .flag-error-recovered::after {
   content: "";
   position: absolute;
   left: -4px;
@@ -497,18 +500,25 @@ table.list {
 .card.error-step {
   border-left: 3px solid var(--bad);
 }
-.card.error-step.recovered {
+.card.recovery-step {
+  border-left: 3px solid var(--good);
+}
+.card.error-step.error-recovered {
   border-left-color: var(--good);
 }
 .err-chip {
   font-weight: 700;
   border: 1px solid currentColor;
 }
-.err-chip.error {
+.err-chip.error-step.error {
   background: #fdeeed;
   color: var(--bad);
 }
-.err-chip.recovered {
+.err-chip.recovery-step {
+  background: #e8f5ed;
+  color: var(--good);
+}
+.err-chip.error-step.error-recovered {
   background: #e8f5ed;
   color: var(--good);
   border-left: 3px solid var(--bad);
