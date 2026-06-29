@@ -253,9 +253,11 @@ def test_loop_and_recovery_counts_from_annotations():
     from trajlens.metrics import REGISTRY
 
     anns = [
-        {"annotator_id": "loop_detect", "value": {"detected": True}, "target_idx": 0},
-        {"annotator_id": "loop_detect", "value": {"detected": False}, "target_idx": 1},
-        {"annotator_id": "loop_detect", "value": {"detected": True}, "target_idx": 2},
+        {"annotator_id": "loop_detect", "value": {"detected": True, "files": {"a.py": 3}}, "target_idx": 0},
+        {"annotator_id": "loop_detect", "value": {"detected": True, "files": {"a.py": 3}}, "target_idx": 1},
+        {"annotator_id": "loop_detect", "value": {"detected": True, "files": {"a.py": 4}}, "target_idx": 2},
+        {"annotator_id": "loop_detect", "value": {"detected": True, "files": {"a.py": 4, "b.py": 3}}, "target_idx": 3},
+        {"annotator_id": "loop_detect", "value": {"detected": False, "files": {}}, "target_idx": 4},
         {"annotator_id": "error_recovery", "value": {"has_error": True, "recovered": True}, "target_idx": 0},
         {"annotator_id": "error_recovery", "value": {"has_error": True, "recovered": False}, "target_idx": 1},
         {"annotator_id": "error_recovery", "value": {"has_error": False, "recovered": False}, "target_idx": 2},

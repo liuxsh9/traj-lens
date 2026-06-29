@@ -20,7 +20,7 @@ def _call(name, args, call_id="c"):
 # ── annotate() unit tests ──────────────────────────────────────────────
 
 def test_annotate_flags_repeated_edits():
-    ctx = [_call("edit", {"file_path": "a.py"}) for _ in range(3)]
+    ctx = [_call("edit", {"file_path": "a.py", "new_string": f"x{i}"}) for i in range(3)]
     out = loop_detect.annotate(unit=ctx[-1:], ctx=ctx)
     assert out["detected"] is True
     assert out["files"] == {"a.py": 3}
@@ -33,6 +33,15 @@ def test_annotate_below_threshold_not_flagged():
     assert out["files"] == {}
 
 
+def test_annotate_ignores_editor_view_calls():
+    ctx = [
+        _call("str_replace_editor", {"command": "view", "path": "a.py"}, call_id=f"v{i}")
+        for i in range(3)
+    ]
+    out = loop_detect.annotate(unit=ctx[-1:], ctx=ctx)
+    assert out == {"detected": False, "files": {}}
+
+
 def test_annotate_no_edits():
     ctx = [MessageItem(role="user", content="hi"),
            _call("read_file", {"path": "a.py"})]
@@ -41,8 +50,8 @@ def test_annotate_no_edits():
 
 
 def test_annotate_distinct_files_counted_separately():
-    ctx = ([_call("edit", {"file_path": "a.py"}) for _ in range(3)]
-           + [_call("edit", {"file_path": "b.py"}) for _ in range(2)])
+    ctx = ([_call("edit", {"file_path": "a.py", "new_string": f"a{i}"}) for i in range(3)]
+           + [_call("edit", {"file_path": "b.py", "new_string": f"b{i}"}) for i in range(2)])
     out = loop_detect.annotate(unit=[], ctx=ctx)
     assert out["detected"] is True
     assert out["files"] == {"a.py": 3}  # b.py only edited twice

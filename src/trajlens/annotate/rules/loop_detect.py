@@ -4,6 +4,19 @@ import json
 from trajlens.core.tool_aliases import canonical, EDIT_TOOLS
 
 PATH_KEYS = {"file_path", "path", "file", "filename"}
+CHANGE_KEYS = {
+    "old_string", "old_str", "oldString",
+    "new_string", "new_str", "newString",
+    "content", "file_text",
+}
+
+
+def _is_real_edit(args: dict) -> bool:
+    """True for edit/write calls that actually change file contents."""
+    cmd = str(args.get("command") or "").lower()
+    if cmd == "view":
+        return False
+    return any(args.get(k) not in (None, "") for k in CHANGE_KEYS)
 
 
 def annotate(unit, ctx):
@@ -17,6 +30,8 @@ def annotate(unit, ctx):
         try:
             args = json.loads(it.arguments)
         except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(args, dict) or not _is_real_edit(args):
             continue
         for k in PATH_KEYS:
             if k in args and isinstance(args[k], str):
