@@ -35,7 +35,9 @@ def load_annotator_config(path: str) -> AnnotatorSpec:
 
 def load_annotator_module(spec: AnnotatorSpec):
     """Import the module implementing the annotator (rule: annotate(); llm: build()+parse())."""
-    return importlib.import_module(spec.config["module"])
+    importlib.invalidate_caches()
+    mod = importlib.import_module(spec.config["module"])
+    return importlib.reload(mod)
 
 
 def _has_annotation(conn, target_hash, annotator_id, version) -> bool:
