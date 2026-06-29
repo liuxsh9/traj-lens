@@ -88,21 +88,24 @@ def enumerate_targets(traj: Trajectory, target: Target) -> list[tuple[str, list[
     elif target == Target.STEP:
         current_step: int | None = None
         start = 0
+        step_target_idx = 0
         for i, it in enumerate(items):
             sid = getattr(it, "step_id", None)
             if sid is not None and sid != current_step:
                 if current_step is not None:
                     step_items = list(items[start:i])
-                    results.append((_target_hash(traj.content_hash, "step", current_step), step_items, (start, i)))
+                    results.append((_target_hash(traj.content_hash, "step", step_target_idx), step_items, (start, i)))
+                    step_target_idx += 1
                 current_step = sid
                 start = i
             elif sid is None and current_step is not None:
                 step_items = list(items[start:i])
-                results.append((_target_hash(traj.content_hash, "step", current_step), step_items, (start, i)))
+                results.append((_target_hash(traj.content_hash, "step", step_target_idx), step_items, (start, i)))
+                step_target_idx += 1
                 current_step = None
         if current_step is not None:
             step_items = list(items[start:len(items)])
-            results.append((_target_hash(traj.content_hash, "step", current_step), step_items, (start, len(items))))
+            results.append((_target_hash(traj.content_hash, "step", step_target_idx), step_items, (start, len(items))))
 
     elif target == Target.TOOL_RESULT:
         for i, it in enumerate(items):

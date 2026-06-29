@@ -56,11 +56,52 @@ def test_error_without_recovery():
     assert out["recovered"] is False  # same tool signature = no strategy change
 
 
+def test_python_code_change_counts_as_recovery():
+    step0 = [FunctionCallItem(name="PythonInterpreter",
+                              arguments=json.dumps({"code": "import os; try: open('words_alpha.txt'); except: pass"}),
+                              call_id="c1", step_id=0, run_id=0),
+             _output("SyntaxError: invalid syntax\n[Command finished with exit code 1]", step_id=0)]
+    step1 = [FunctionCallItem(name="PythonInterpreter",
+                              arguments=json.dumps({"code": "try:\n    open('words_alpha.txt')\nexcept FileNotFoundError:\n    pass"}),
+                              call_id="c2", step_id=1, run_id=0),
+             _output("ok", call_id="c2", step_id=1)]
+
+    out = error_recovery.annotate(step0, step0 + step1)
+
+    assert out["has_error"] is True
+    assert out["recovered"] is True
+
+
+def test_bash_command_change_counts_as_recovery():
+    step0 = [FunctionCallItem(name="execute_bash",
+                              arguments=json.dumps({"command": "python -c 'import barril'"}),
+                              call_id="c1", step_id=0, run_id=0),
+             _output("ModuleNotFoundError: No module named 'barril'\n[Command finished with exit code 1]", step_id=0)]
+    step1 = [FunctionCallItem(name="execute_bash",
+                              arguments=json.dumps({"command": 'pip install -e ".[testing]"'}),
+                              call_id="c2", step_id=1, run_id=0),
+             _output("Successfully installed", call_id="c2", step_id=1)]
+
+    out = error_recovery.annotate(step0, step0 + step1)
+
+    assert out["has_error"] is True
+    assert out["recovered"] is True
+
+
 def test_exit_code_nonzero():
     unit = [_call("bash", {"command": "make"}),
             _output("exit code 1")]
     out = error_recovery.annotate(unit, unit)
     assert out["has_error"] is True
+
+
+def test_grep_no_match_exit_one_is_not_error():
+    unit = [_call("bash", {"command": "grep -rn 'needle' src/"}),
+            _output("[The command completed with exit code 1]\n[Command finished with exit code 1]")]
+
+    out = error_recovery.annotate(unit, unit)
+
+    assert out["has_error"] is False
 
 
 def test_exit_code_zero_not_error():
@@ -75,3 +116,18 @@ def test_traceback_detected():
             _output("Traceback (most recent call last):\n  File...")]
     out = error_recovery.annotate(unit, unit)
     assert out["has_error"] is True
+
+
+def test_error_summary_prefers_pytest_failed_line():
+    output = (
+        "============================= test session starts ==============================\n"
+        "platform linux -- Python 3.12\n"
+        "FAILED tests/test_units.py::test_default_category - AssertionError\n"
+        "[Command finished with exit code 1]"
+    )
+    unit = [_call("bash", {"command": "pytest"}), _output(output)]
+
+    out = error_recovery.annotate(unit, unit)
+
+    assert out["has_error"] is True
+    assert out["error_summary"].startswith("FAILED tests/test_units.py::test_default_category")
