@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import {
+  buildWorkflowTasks,
   formatJobLabel,
   formatJobTiming,
   keepLatestJobsByAnnotator,
   summarizeAnnotatorProgress,
+  summarizeWorkflowProgress,
 } from "../src/components/annotatorProgress";
 import type { JobInfo } from "../src/api";
 
@@ -44,6 +46,31 @@ const done = summarizeAnnotatorProgress([
 ]);
 
 assert.equal(done.pct, 100);
+
+const workflow = summarizeWorkflowProgress([
+  { id: "a", status: "done" },
+  { id: "b", status: "done" },
+  { id: "c", status: "done" },
+  { id: "d", status: "running", innerPct: 50 },
+  { id: "e", status: "pending" },
+  { id: "f", status: "pending" },
+  { id: "g", status: "pending" },
+  { id: "metrics", status: "pending" },
+]);
+
+assert.equal(workflow.finishedSlots, 3.5);
+assert.equal(workflow.totalSlots, 8);
+assert.equal(workflow.pct, 44);
+
+const plannedWorkflow = summarizeWorkflowProgress(buildWorkflowTasks(
+  ["resolution", "change_acceptance", "topic", "intent", "pushback", "loop_detect", "semgrep", "metrics"],
+  [job({ annotator_id: "resolution", status: "done", done: 10, total: 10 })],
+  null,
+));
+
+assert.equal(plannedWorkflow.finishedSlots, 1);
+assert.equal(plannedWorkflow.totalSlots, 8);
+assert.equal(plannedWorkflow.pct, 13);
 
 const deduped = keepLatestJobsByAnnotator([
   job({ job_id: "old", annotator_id: "loop_detect", status: "done", done: 0, skipped: 2, created_at: "2026-06-26T12:23:00Z" }),

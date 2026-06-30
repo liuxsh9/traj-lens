@@ -7,6 +7,23 @@ export interface AnnotatorProgressSummary {
   pending: number;
 }
 
+export type WorkflowTaskStatus = "pending" | "running" | "done" | "failed";
+
+export interface WorkflowProgressTask {
+  id: string;
+  status: WorkflowTaskStatus;
+  innerPct?: number;
+  weight?: number;
+}
+
+export interface WorkflowProgressSummary {
+  finishedSlots: number;
+  totalSlots: number;
+  pct: number;
+  pending: number;
+  running: number;
+}
+
 function jobTime(job: JobInfo): number {
   return job.created_at ? new Date(job.created_at).getTime() || 0 : 0;
 }
@@ -101,4 +118,64 @@ export function summarizeAnnotatorProgress(activeJobs: JobInfo[]): AnnotatorProg
     ? Math.round((finished / total) * 100)
     : 0;
   return { finished, total: total || null, pct, pending };
+}
+
+export function summarizeWorkflowProgress(tasks: WorkflowProgressTask[]): WorkflowProgressSummary {
+  const totalSlots = tasks.reduce((sum, task) => sum + (task.weight ?? 1), 0);
+  const finishedSlots = tasks.reduce((sum, task) => {
+    const weight = task.weight ?? 1;
+    if (task.status === "done" || task.status === "failed") return sum + weight;
+    if (task.status !== "running") return sum;
+    const innerPct = Math.max(0, Math.min(100, task.innerPct ?? 0));
+    return sum + weight * (innerPct / 100);
+  }, 0);
+  const pct = totalSlots > 0 ? Math.round((finishedSlots / totalSlots) * 100) : 0;
+  return {
+    finishedSlots,
+    totalSlots,
+    pct,
+    pending: tasks.filter((task) => task.status === "pending").length,
+    running: tasks.filter((task) => task.status === "running").length,
+  };
+}
+
+export function workflowTaskFromJob(job: JobInfo): WorkflowProgressTask {
+  if (job.status === "pending") {
+    const total = job.total ?? 0;
+    const finished = (job.done ?? 0) + (job.skipped ?? 0);
+    return {
+      id: job.job_id,
+      status: total > 0 ? "running" : "pending",
+      innerPct: total > 0 ? Math.round((finished / total) * 100) : 0,
+    };
+  }
+  if (job.status === "done") return { id: job.job_id, status: "done" };
+  return { id: job.job_id, status: "failed" };
+}
+
+export function workflowTaskFromMetrics(metrics: { status: "pending" | "done" | "error"; computed?: number } | null): WorkflowProgressTask | null {
+  if (!metrics) return null;
+  if (metrics.status === "pending") return { id: "metrics", status: "running", innerPct: 0 };
+  if (metrics.status === "done") return { id: "metrics", status: "done" };
+  return { id: "metrics", status: "failed" };
+}
+
+export function buildWorkflowTasks(
+  plan: string[],
+  jobs: JobInfo[],
+  metrics: { status: "pending" | "done" | "error"; computed?: number } | null,
+): WorkflowProgressTask[] {
+  const byAnnotator = new Map(jobs.map((job) => [job.annotator_id, job]));
+  const planned = plan.map((id): WorkflowProgressTask => {
+    if (id === "metrics") {
+      return workflowTaskFromMetrics(metrics) ?? { id, status: "pending" };
+    }
+    const plannedJob = byAnnotator.get(id);
+    return plannedJob ? workflowTaskFromJob(plannedJob) : { id, status: "pending" };
+  });
+  const plannedIds = new Set(plan);
+  const extras = jobs
+    .filter((job) => !plannedIds.has(job.annotator_id))
+    .map(workflowTaskFromJob);
+  return [...planned, ...extras];
 }
