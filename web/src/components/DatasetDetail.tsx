@@ -21,6 +21,7 @@ import { useSticky } from "../useSticky";
 import {
   formatJobLabel,
   formatJobTiming,
+  formatWorkflowProgressLabel,
   buildWorkflowTasks,
   jobErrCount,
   keepLatestJobsByAnnotator,
@@ -317,10 +318,6 @@ function metricsLabel(m: { status: string; computed?: number }): { text: string;
   return { text: `✓ ${m.computed ?? 0} computed`, color: "var(--good)" };
 }
 
-function formatWorkflowSlots(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
 const ANNOTATOR_ORDER = [
   "resolution",
   "change_acceptance",
@@ -367,7 +364,6 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
     { status: "pending" | "done" | "error"; computed?: number } | null
   >(null);
   const [workflowPlan, setWorkflowPlan] = useState<string[]>([]);
-  const workflowPctRef = useRef(0);
 
   // Recompute metrics (annotation-independent ones aren't touched by the
   // annotator path; this fills/refreshes them) then refresh the views.
@@ -438,8 +434,7 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
     if (!confirmAnnotatorAction(force ? "force_refresh_all" : "run_all")) return;
     setRunning(true);
     setMetrics(null);
-    setWorkflowPlan([...annotators.map((a) => a.id), "metrics"]);
-    workflowPctRef.current = 0;
+    setWorkflowPlan([...annotators.map((a) => a.id), "semgrep", "metrics"]);
     try {
       const results = await Promise.allSettled(
         annotators.map(async (a) => {
@@ -455,7 +450,6 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
       try {
         const scanJob = await scanDataset(datasetId);
         jobs.push(scanJob);
-        setWorkflowPlan((prev) => prev.includes("semgrep") ? prev : [...prev.filter((id) => id !== "metrics"), "semgrep", "metrics"]);
         setActiveJobs((prev) => keepLatestJobsByAnnotator([...prev, scanJob]));
       } catch { /* semgrep absent */ }
       if (jobs.length > 0) {
@@ -470,7 +464,6 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
     setScanNotice(null);
     setMetrics(null);
     setWorkflowPlan(["semgrep", "metrics"]);
-    workflowPctRef.current = 0;
     try {
       const job = await scanDataset(datasetId);
       setActiveJobs((prev) => keepLatestJobsByAnnotator([...prev, job]));
@@ -487,7 +480,6 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
     if (force && !confirmAnnotatorAction("force_refresh_one", window.confirm, formatAnnotatorLabel(a.id))) return;
     setMetrics(null);
     setWorkflowPlan([a.id, "metrics"]);
-    workflowPctRef.current = 0;
     try {
       const job = await createJob(a.path, datasetId, force);
       setActiveJobs((prev) => keepLatestJobsByAnnotator([...prev, job]));
@@ -554,16 +546,14 @@ function AnnotatePanel({ datasetId }: { datasetId: string }) {
           {(activeJobs.some((j) => j.status === "pending") || metrics?.status === "pending") && (() => {
             const fallbackPlan = activeJobs.length > 0 ? [...activeJobs.map((j) => j.annotator_id), "metrics"] : [];
             const tasks = buildWorkflowTasks(workflowPlan.length > 0 ? workflowPlan : fallbackPlan, activeJobs, metrics);
-            const { finishedSlots, totalSlots, pct, pending, running } = summarizeWorkflowProgress(tasks);
-            workflowPctRef.current = Math.max(workflowPctRef.current, pct);
-            const displayPct = workflowPctRef.current;
+            const workflow = summarizeWorkflowProgress(tasks);
             return (
               <div style={{ marginTop: 8 }}>
                 <div className="dim" style={{ fontSize: 11 }}>
-                  Workflow progress · {formatWorkflowSlots(finishedSlots)}/{formatWorkflowSlots(totalSlots)} tasks · {displayPct}% overall · {running} running · {pending} waiting
+                  {formatWorkflowProgressLabel(workflow)}
                 </div>
                 <div className="res-bar" style={{ marginTop: 3 }}>
-                  <div style={{ width: `${displayPct}%`, background: "var(--warn)", minWidth: displayPct > 0 ? 4 : 0 }} />
+                  <div style={{ width: `${workflow.pct}%`, background: "var(--warn)", minWidth: workflow.pct > 0 ? 4 : 0 }} />
                 </div>
               </div>
             );

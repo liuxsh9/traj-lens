@@ -24,6 +24,10 @@ export interface WorkflowProgressSummary {
   running: number;
 }
 
+function fmtSlot(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 function jobTime(job: JobInfo): number {
   return job.created_at ? new Date(job.created_at).getTime() || 0 : 0;
 }
@@ -178,4 +182,14 @@ export function buildWorkflowTasks(
     .filter((job) => !plannedIds.has(job.annotator_id))
     .map(workflowTaskFromJob);
   return [...planned, ...extras];
+}
+
+export function formatWorkflowProgressLabel(summary: WorkflowProgressSummary): string {
+  return [
+    "Workflow progress",
+    `${fmtSlot(summary.finishedSlots)}/${fmtSlot(summary.totalSlots)} tasks`,
+    `${summary.pct}% overall`,
+    `${summary.running} running`,
+    `${summary.pending} waiting`,
+  ].join(" · ");
 }

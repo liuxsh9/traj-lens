@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   buildWorkflowTasks,
+  formatWorkflowProgressLabel,
   formatJobLabel,
   formatJobTiming,
   keepLatestJobsByAnnotator,
@@ -71,6 +72,17 @@ const plannedWorkflow = summarizeWorkflowProgress(buildWorkflowTasks(
 assert.equal(plannedWorkflow.finishedSlots, 1);
 assert.equal(plannedWorkflow.totalSlots, 8);
 assert.equal(plannedWorkflow.pct, 13);
+
+assert.equal(
+  formatWorkflowProgressLabel({
+    finishedSlots: 0.2,
+    totalSlots: 10,
+    pct: 2,
+    pending: 8,
+    running: 2,
+  }),
+  "Workflow progress · 0.2/10 tasks · 2% overall · 2 running · 8 waiting",
+);
 
 const deduped = keepLatestJobsByAnnotator([
   job({ job_id: "old", annotator_id: "loop_detect", status: "done", done: 0, skipped: 2, created_at: "2026-06-26T12:23:00Z" }),
