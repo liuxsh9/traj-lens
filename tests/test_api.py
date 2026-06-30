@@ -230,9 +230,17 @@ def test_loop_count_matches_detail_loop_episodes(tmp_path):
             ]},
             {"role": "tool", "tool_call_id": "a", "content": "ok"},
             {"role": "assistant", "tool_calls": [
+                {"id": "ra", "type": "function", "function": {"name": "read", "arguments": json.dumps({"file_path": "a.py"})}},
+            ]},
+            {"role": "tool", "tool_call_id": "ra", "content": "contents"},
+            {"role": "assistant", "tool_calls": [
                 {"id": "b", "type": "function", "function": {"name": "edit", "arguments": json.dumps({"file_path": "a.py", "new_string": "2"})}},
             ]},
             {"role": "tool", "tool_call_id": "b", "content": "ok"},
+            {"role": "assistant", "tool_calls": [
+                {"id": "tb", "type": "function", "function": {"name": "bash", "arguments": json.dumps({"command": "pytest -q"})}},
+            ]},
+            {"role": "tool", "tool_call_id": "tb", "content": "FAILED tests/test_a.py"},
             {"role": "assistant", "tool_calls": [
                 {"id": "c", "type": "function", "function": {"name": "edit", "arguments": json.dumps({"file_path": "a.py", "new_string": "3"})}},
             ]},
@@ -250,6 +258,30 @@ def test_loop_count_matches_detail_loop_episodes(tmp_path):
 
     assert row["metrics"]["loop_count"] == 1
     assert len(detail["loop_episodes"]) == row["metrics"]["loop_count"]
+
+
+def test_loop_count_ignores_large_file_edits_without_feedback(tmp_path):
+    c = _client(tmp_path)
+    ds = c.post("/api/v1/datasets", json={"name": "large file edits"}).json()
+    messages = [{"role": "user", "content": "edit several sections"}]
+    for i in range(5):
+        messages.extend([
+            {"role": "assistant", "tool_calls": [
+                {"id": f"e{i}", "type": "function", "function": {
+                    "name": "edit",
+                    "arguments": json.dumps({"file_path": "large.py", "new_string": str(i)}),
+                }},
+            ]},
+            {"role": "tool", "tool_call_id": f"e{i}", "content": "ok"},
+        ])
+    messages.append({"role": "assistant", "content": "done"})
+    _upload_and_wait(c, ds["id"], json.dumps({"messages": messages}) + "\n")
+
+    row = c.get(f"/api/v1/datasets/{ds['id']}/trajectories").json()["items"][0]
+    detail = c.get(f"/api/v1/trajectories/{row['content_hash']}").json()
+
+    assert row["metrics"]["loop_count"] == 0
+    assert detail["loop_episodes"] == []
 
 
 def test_loop_count_ignores_parallel_tool_calls_in_one_step(tmp_path):

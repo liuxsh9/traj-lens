@@ -261,7 +261,7 @@ def test_recovery_count_from_annotations():
     assert REGISTRY["recovery_count"][0](None, None, anns) == 1
 
 
-def test_loop_count_uses_episode_count_from_code_changes():
+def test_loop_count_uses_confirmed_episode_count_from_code_changes():
     from trajlens.core.grouping import assign_groups
     from trajlens.core.loop_episodes import build_loop_episodes
     from trajlens.core.model import FunctionCallItem, FunctionCallOutputItem
@@ -269,8 +269,12 @@ def test_loop_count_uses_episode_count_from_code_changes():
     items = assign_groups([
         FunctionCallItem(name="edit", call_id="a", arguments=json.dumps({"file_path": "a.py", "new_string": "1"})),
         FunctionCallOutputItem(call_id="a", output="ok"),
+        FunctionCallItem(name="read", call_id="ra", arguments=json.dumps({"file_path": "a.py"})),
+        FunctionCallOutputItem(call_id="ra", output="contents"),
         FunctionCallItem(name="edit", call_id="b", arguments=json.dumps({"file_path": "a.py", "new_string": "2"})),
         FunctionCallOutputItem(call_id="b", output="ok"),
+        FunctionCallItem(name="bash", call_id="tb", arguments=json.dumps({"command": "pytest -q"})),
+        FunctionCallOutputItem(call_id="tb", output="FAILED test_a.py"),
         FunctionCallItem(name="edit", call_id="c", arguments=json.dumps({"file_path": "a.py", "new_string": "3"})),
         FunctionCallOutputItem(call_id="c", output="ok"),
         FunctionCallItem(name="edit", call_id="d", arguments=json.dumps({"file_path": "a.py", "new_string": "4"})),
@@ -285,6 +289,27 @@ def test_loop_count_uses_episode_count_from_code_changes():
 
     assert len(episodes) == 1
     assert REGISTRY["loop_count"][0](traj, None, []) == 1
+
+
+def test_loop_count_ignores_large_file_edits_without_feedback():
+    from trajlens.core.grouping import assign_groups
+    from trajlens.core.loop_episodes import build_loop_episodes
+    from trajlens.core.model import FunctionCallItem, FunctionCallOutputItem
+
+    items = assign_groups([
+        item
+        for i in range(5)
+        for item in [
+            FunctionCallItem(name="edit", call_id=f"c{i}", arguments=json.dumps({"file_path": "large.py", "new_string": str(i)})),
+            FunctionCallOutputItem(call_id=f"c{i}", output="ok"),
+        ]
+    ])
+    traj = Trajectory(content_hash=content_hash(items), items=items)
+
+    episodes = build_loop_episodes(traj.items)
+
+    assert episodes == []
+    assert REGISTRY["loop_count"][0](traj, None, []) == 0
 
 
 def test_loop_count_ignores_parallel_edits_in_one_step():

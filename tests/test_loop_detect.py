@@ -7,6 +7,7 @@ from trajlens.annotate import Target, enumerate_targets
 from trajlens.annotate.rules import loop_detect
 from trajlens.annotate import runner
 from trajlens.core.model import FunctionCallItem, MessageItem
+from trajlens.core.model import FunctionCallOutputItem
 from trajlens.store import db as dbmod, repo
 
 SAMPLES = pathlib.Path(__file__).parent / "samples"
@@ -23,10 +24,30 @@ def _call(name, args, call_id="c", run_id=None, step_id=None):
     )
 
 
+def _out(call_id, output="ok", run_id=None, step_id=None):
+    return FunctionCallOutputItem(call_id=call_id, output=output, run_id=run_id, step_id=step_id)
+
+
 # ── annotate() unit tests ──────────────────────────────────────────────
 
-def test_annotate_flags_repeated_edits():
+def test_annotate_repeated_edits_without_feedback_not_flagged():
     ctx = [_call("edit", {"file_path": "a.py", "new_string": f"x{i}"}) for i in range(3)]
+    out = loop_detect.annotate(unit=ctx[-1:], ctx=ctx)
+    assert out == {"detected": False, "files": {}}
+
+
+def test_annotate_flags_repeated_edits_with_feedback_between():
+    ctx = [
+        _call("edit", {"file_path": "a.py", "new_string": "x0"}, call_id="e0", run_id=0, step_id=0),
+        _out("e0", run_id=0, step_id=0),
+        _call("read", {"file_path": "a.py"}, call_id="r0", run_id=0, step_id=1),
+        _out("r0", "contents", run_id=0, step_id=1),
+        _call("edit", {"file_path": "a.py", "new_string": "x1"}, call_id="e1", run_id=0, step_id=2),
+        _out("e1", run_id=0, step_id=2),
+        _call("bash", {"command": "pytest -q"}, call_id="b0", run_id=0, step_id=3),
+        _out("b0", "FAILED tests/test_a.py", run_id=0, step_id=3),
+        _call("edit", {"file_path": "a.py", "new_string": "x2"}, call_id="e2", run_id=0, step_id=4),
+    ]
     out = loop_detect.annotate(unit=ctx[-1:], ctx=ctx)
     assert out["detected"] is True
     assert out["files"] == {"a.py": 3}
@@ -51,8 +72,7 @@ def test_annotate_flags_repeated_edits_across_distinct_steps():
 
     out = loop_detect.annotate(unit=ctx[-1:], ctx=ctx)
 
-    assert out["detected"] is True
-    assert out["files"] == {"a.py": 3}
+    assert out == {"detected": False, "files": {}}
 
 
 def test_annotate_below_threshold_not_flagged():
@@ -79,8 +99,16 @@ def test_annotate_no_edits():
 
 
 def test_annotate_distinct_files_counted_separately():
-    ctx = ([_call("edit", {"file_path": "a.py", "new_string": f"a{i}"}) for i in range(3)]
-           + [_call("edit", {"file_path": "b.py", "new_string": f"b{i}"}) for i in range(2)])
+    ctx = [
+        _call("edit", {"file_path": "a.py", "new_string": "a0"}, call_id="a0", run_id=0, step_id=0),
+        _call("read", {"file_path": "a.py"}, call_id="ra", run_id=0, step_id=1),
+        _call("edit", {"file_path": "a.py", "new_string": "a1"}, call_id="a1", run_id=0, step_id=2),
+        _call("bash", {"command": "pytest -q"}, call_id="ba", run_id=0, step_id=3),
+        _call("edit", {"file_path": "a.py", "new_string": "a2"}, call_id="a2", run_id=0, step_id=4),
+        _call("edit", {"file_path": "b.py", "new_string": "b0"}, call_id="b0", run_id=0, step_id=5),
+        _call("read", {"file_path": "b.py"}, call_id="rb", run_id=0, step_id=6),
+        _call("edit", {"file_path": "b.py", "new_string": "b1"}, call_id="b1", run_id=0, step_id=7),
+    ]
     out = loop_detect.annotate(unit=[], ctx=ctx)
     assert out["detected"] is True
     assert out["files"] == {"a.py": 3}  # b.py only edited twice

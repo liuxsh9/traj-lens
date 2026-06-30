@@ -21,6 +21,29 @@ function item(runId: number, stepId: number): Item {
   };
 }
 
+function callItem(runId: number, stepId: number, name: string, callId = `${name}-${runId}-${stepId}`): Item {
+  return {
+    type: "function_call",
+    name,
+    arguments: name === "bash" ? "{\"command\":\"pytest -q\"}" : "{}",
+    call_id: callId,
+    step_id: stepId,
+    run_id: runId,
+    provenance: null,
+  };
+}
+
+function outputItem(runId: number, stepId: number, callId: string, output = "ok"): Item {
+  return {
+    type: "function_call_output",
+    call_id: callId,
+    output,
+    step_id: stepId,
+    run_id: runId,
+    provenance: null,
+  };
+}
+
 function change(path: string, stepId: number, itemIdx = stepId, runId = 0): CodeChange {
   return {
     item_idx: itemIdx,
@@ -36,6 +59,19 @@ function change(path: string, stepId: number, itemIdx = stepId, runId = 0): Code
 }
 
 const items = Array.from({ length: 26 }, (_, i) => item(0, i));
+const feedbackItems = [
+  ...items,
+  callItem(0, 2, "read", "r2"),
+  outputItem(0, 2, "r2", "contents"),
+  callItem(0, 4, "read", "r4"),
+  outputItem(0, 4, "r4", "contents"),
+  callItem(0, 5, "bash", "b5"),
+  outputItem(0, 5, "b5", "FAILED test"),
+  callItem(0, 18, "read", "r18"),
+  outputItem(0, 18, "r18", "contents"),
+  callItem(0, 20, "bash", "b20"),
+  outputItem(0, 20, "b20", "FAILED test"),
+].sort((a, b) => (a.step_id ?? 0) - (b.step_id ?? 0));
 
 const episodes = buildLoopEpisodes([
   change("a.ts", 2),
@@ -47,7 +83,7 @@ const episodes = buildLoopEpisodes([
   change("a.ts", 21),
   change("b.ts", 4),
   { ...change("b.ts", 5), op: "run", command: "npm test", path: null },
-], items);
+], feedbackItems);
 
 assert.equal(episodes.length, 2);
 assert.deepEqual(episodes.map((e) => ({
@@ -94,13 +130,31 @@ const distinctStepEpisodes = buildLoopEpisodes([
   change("distinct.ts", 8, 80, 0),
   change("distinct.ts", 9, 90, 0),
 ], items);
-assert.deepEqual(distinctStepEpisodes.map((e) => ({
+assert.equal(distinctStepEpisodes.length, 0);
+
+const confirmedStepEpisodes = buildLoopEpisodes([
+  change("confirmed.ts", 7, 70, 0),
+  change("confirmed.ts", 9, 90, 0),
+  change("confirmed.ts", 11, 110, 0),
+], [
+  ...items,
+  callItem(0, 7, "edit", "ce7"),
+  outputItem(0, 7, "ce7"),
+  callItem(0, 8, "read", "cr8"),
+  outputItem(0, 8, "cr8", "contents"),
+  callItem(0, 9, "edit", "ce9"),
+  outputItem(0, 9, "ce9"),
+  callItem(0, 10, "bash", "cb10"),
+  outputItem(0, 10, "cb10", "FAILED test"),
+  callItem(0, 11, "edit", "ce11"),
+].sort((a, b) => (a.step_id ?? 0) - (b.step_id ?? 0)));
+assert.deepEqual(confirmedStepEpisodes.map((e) => ({
   startKey: e.startKey,
   triggerKey: e.triggerKey,
   endKey: e.endKey,
   editCount: e.editCount,
 })), [
-  { startKey: "0-7", triggerKey: "0-9", endKey: "0-9", editCount: 3 },
+  { startKey: "0-7", triggerKey: "0-11", endKey: "0-11", editCount: 3 },
 ]);
 
 const multiRunItems = [
@@ -128,12 +182,10 @@ assert.deepEqual(researchEpisodes.map((e) => ({
   triggerKey: e.triggerKey,
   endKey: e.endKey,
   editCount: e.editCount,
-})), [
-  { startKey: "3-3", triggerKey: "3-6", endKey: "3-6", editCount: 3 },
-]);
+})), []);
 assert.equal(loopMarkerForStep("2-3", researchEpisodes).length, 0);
-assert.equal(loopMarkerForStep("3-6", researchEpisodes)[0]?.episode.path, "research-client.tsx");
-assert.equal(loopLabelMarkersForStep("3-3", researchEpisodes)[0]?.episode.path, "research-client.tsx");
+assert.equal(loopMarkerForStep("3-6", researchEpisodes).length, 0);
+assert.equal(loopLabelMarkersForStep("3-3", researchEpisodes).length, 0);
 assert.equal(loopLabelMarkersForStep("3-6", researchEpisodes).length, 0);
 
 const normalized = normalizeLoopEpisodes([{
