@@ -13,8 +13,14 @@ SAMPLES = pathlib.Path(__file__).parent / "samples"
 LONG_RUN = SAMPLES / "openai_messages" / "agentic_long_run.json"
 
 
-def _call(name, args, call_id="c"):
-    return FunctionCallItem(name=name, arguments=json.dumps(args), call_id=call_id)
+def _call(name, args, call_id="c", run_id=None, step_id=None):
+    return FunctionCallItem(
+        name=name,
+        arguments=json.dumps(args),
+        call_id=call_id,
+        run_id=run_id,
+        step_id=step_id,
+    )
 
 
 # ── annotate() unit tests ──────────────────────────────────────────────
@@ -22,6 +28,29 @@ def _call(name, args, call_id="c"):
 def test_annotate_flags_repeated_edits():
     ctx = [_call("edit", {"file_path": "a.py", "new_string": f"x{i}"}) for i in range(3)]
     out = loop_detect.annotate(unit=ctx[-1:], ctx=ctx)
+    assert out["detected"] is True
+    assert out["files"] == {"a.py": 3}
+
+
+def test_annotate_counts_distinct_steps_not_parallel_calls():
+    ctx = [
+        _call("edit", {"file_path": "a.py", "new_string": f"x{i}"}, call_id=f"c{i}", run_id=0, step_id=0)
+        for i in range(5)
+    ]
+
+    out = loop_detect.annotate(unit=ctx[-1:], ctx=ctx)
+
+    assert out == {"detected": False, "files": {}}
+
+
+def test_annotate_flags_repeated_edits_across_distinct_steps():
+    ctx = [
+        _call("edit", {"file_path": "a.py", "new_string": f"x{i}"}, call_id=f"c{i}", run_id=0, step_id=i)
+        for i in range(3)
+    ]
+
+    out = loop_detect.annotate(unit=ctx[-1:], ctx=ctx)
+
     assert out["detected"] is True
     assert out["files"] == {"a.py": 3}
 

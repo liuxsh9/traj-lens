@@ -11,7 +11,7 @@ from trajlens.core.loop_episodes import build_loop_episodes
 from trajlens.metrics import register
 
 _VERSION = "2"
-_LOOP_COUNT_VERSION = "3"
+_LOOP_COUNT_VERSION = "4"
 _OVERALL_SCORE_VERSION = "6"
 
 

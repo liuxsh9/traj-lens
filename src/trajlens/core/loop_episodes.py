@@ -54,14 +54,20 @@ def _step_order(items: list[Item]) -> tuple[list[str], dict[str, int]]:
 def build_loop_episodes(items: list[Item], gap_steps: int = LOOP_GAP_STEPS) -> list[LoopEpisode]:
     keys, order = _step_order(items)
     by_path: dict[str, list[LoopEditPoint]] = {}
+    seen_steps_by_path: dict[str, set[str]] = {}
 
     for change in extract_changes(items):
         if change.op not in ("create", "edit") or not change.path:
             continue
         if change.run_id is None or change.step_id is None:
             continue
+        key = _step_key(change.run_id, change.step_id)
+        seen_steps = seen_steps_by_path.setdefault(change.path, set())
+        if key in seen_steps:
+            continue
+        seen_steps.add(key)
         point = LoopEditPoint(
-            key=_step_key(change.run_id, change.step_id),
+            key=key,
             run_id=change.run_id,
             step_id=change.step_id,
             item_idx=change.item_idx,

@@ -22,6 +22,7 @@ def _is_real_edit(args: dict) -> bool:
 def annotate(unit, ctx):
     """Returns {"detected": bool, "files": {path: count}} for files edited ≥3 times."""
     counts: dict[str, int] = {}
+    seen_steps: dict[str, set[tuple[int, int]]] = {}
     for it in ctx:
         if it.type != "function_call":
             continue
@@ -35,7 +36,14 @@ def annotate(unit, ctx):
             continue
         for k in PATH_KEYS:
             if k in args and isinstance(args[k], str):
-                counts[args[k]] = counts.get(args[k], 0) + 1
+                path = args[k]
+                if it.run_id is not None and it.step_id is not None:
+                    step_key = (it.run_id, it.step_id)
+                    steps = seen_steps.setdefault(path, set())
+                    if step_key in steps:
+                        break
+                    steps.add(step_key)
+                counts[path] = counts.get(path, 0) + 1
                 break
     flagged = {p: c for p, c in counts.items() if c >= 3}
     return {"detected": bool(flagged), "files": flagged}

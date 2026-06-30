@@ -80,6 +80,29 @@ assert.equal(minimapLoopClass("0-4", episodes), "flag-loop");
 assert.equal(minimapLoopClass("0-6", episodes), "flag-loop-end");
 assert.equal(minimapLoopClass("0-7", episodes), "");
 
+const parallelSameStepEpisodes = buildLoopEpisodes([
+  change("parallel.ts", 3, 30, 0),
+  change("parallel.ts", 3, 31, 0),
+  change("parallel.ts", 3, 32, 0),
+  change("parallel.ts", 3, 33, 0),
+  change("parallel.ts", 3, 34, 0),
+], items);
+assert.equal(parallelSameStepEpisodes.length, 0);
+
+const distinctStepEpisodes = buildLoopEpisodes([
+  change("distinct.ts", 7, 70, 0),
+  change("distinct.ts", 8, 80, 0),
+  change("distinct.ts", 9, 90, 0),
+], items);
+assert.deepEqual(distinctStepEpisodes.map((e) => ({
+  startKey: e.startKey,
+  triggerKey: e.triggerKey,
+  endKey: e.endKey,
+  editCount: e.editCount,
+})), [
+  { startKey: "0-7", triggerKey: "0-9", endKey: "0-9", editCount: 3 },
+]);
+
 const multiRunItems = [
   item(0, 0), item(0, 1), item(0, 2), item(0, 3),
   item(1, 0), item(1, 1), item(1, 2),

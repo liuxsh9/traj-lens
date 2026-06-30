@@ -264,14 +264,19 @@ def test_recovery_count_from_annotations():
 def test_loop_count_uses_episode_count_from_code_changes():
     from trajlens.core.grouping import assign_groups
     from trajlens.core.loop_episodes import build_loop_episodes
-    from trajlens.core.model import FunctionCallItem
+    from trajlens.core.model import FunctionCallItem, FunctionCallOutputItem
 
     items = assign_groups([
         FunctionCallItem(name="edit", call_id="a", arguments=json.dumps({"file_path": "a.py", "new_string": "1"})),
+        FunctionCallOutputItem(call_id="a", output="ok"),
         FunctionCallItem(name="edit", call_id="b", arguments=json.dumps({"file_path": "a.py", "new_string": "2"})),
+        FunctionCallOutputItem(call_id="b", output="ok"),
         FunctionCallItem(name="edit", call_id="c", arguments=json.dumps({"file_path": "a.py", "new_string": "3"})),
+        FunctionCallOutputItem(call_id="c", output="ok"),
         FunctionCallItem(name="edit", call_id="d", arguments=json.dumps({"file_path": "a.py", "new_string": "4"})),
+        FunctionCallOutputItem(call_id="d", output="ok"),
         FunctionCallItem(name="edit", call_id="e", arguments=json.dumps({"file_path": "a.py", "new_string": "5"})),
+        FunctionCallOutputItem(call_id="e", output="ok"),
         FunctionCallItem(name="edit", call_id="f", arguments=json.dumps({"file_path": "a.py", "new_string": "6"})),
     ])
     traj = Trajectory(content_hash=content_hash(items), items=items)
@@ -280,6 +285,23 @@ def test_loop_count_uses_episode_count_from_code_changes():
 
     assert len(episodes) == 1
     assert REGISTRY["loop_count"][0](traj, None, []) == 1
+
+
+def test_loop_count_ignores_parallel_edits_in_one_step():
+    from trajlens.core.grouping import assign_groups
+    from trajlens.core.loop_episodes import build_loop_episodes
+    from trajlens.core.model import FunctionCallItem
+
+    items = assign_groups([
+        FunctionCallItem(name="edit", call_id=f"c{i}", arguments=json.dumps({"file_path": "a.py", "new_string": str(i)}))
+        for i in range(5)
+    ])
+    traj = Trajectory(content_hash=content_hash(items), items=items)
+
+    episodes = build_loop_episodes(traj.items)
+
+    assert episodes == []
+    assert REGISTRY["loop_count"][0](traj, None, []) == 0
 
 
 # ── Staleness ─────────────────────────────────────────────────────────

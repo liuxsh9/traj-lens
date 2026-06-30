@@ -4,4 +4,4 @@ target: step
 context: prefix
 module: trajlens.annotate.rules.loop_detect
 # bump when rule heuristics change; compute_version hashes YAML, not rule code.
-rule_version: 2  # 2: editor view/read calls no longer count as edits
+rule_version: 3  # 3: repeated edits count distinct steps, not parallel calls

@@ -74,11 +74,16 @@ export function buildLoopEpisodes(
 ): LoopEpisode[] {
   const { keys, order } = enumerateStepOrder(items);
   const byPath = new Map<string, LoopEditPoint[]>();
+  const seenStepsByPath = new Map<string, Set<string>>();
 
   for (const c of changes) {
     if ((c.op !== "create" && c.op !== "edit") || !c.path) continue;
     if (c.run_id == null || c.step_id == null) continue;
     const key = stepKey(c.run_id, c.step_id);
+    const seenSteps = seenStepsByPath.get(c.path) ?? new Set<string>();
+    if (seenSteps.has(key)) continue;
+    seenSteps.add(key);
+    seenStepsByPath.set(c.path, seenSteps);
     const point: LoopEditPoint = {
       key,
       runId: c.run_id,
