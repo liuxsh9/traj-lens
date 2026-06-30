@@ -359,6 +359,40 @@ def put_annotation(conn, *, target_hash: str, annotator_id: str,
     conn.commit()
 
 
+def delete_annotations_for_targets(conn, *, content_hash: str, target_type: str,
+                                   annotator_id: str) -> None:
+    conn.execute("BEGIN IMMEDIATE")
+    conn.execute(
+        "DELETE FROM annotations"
+        " WHERE annotator_id=?"
+        " AND target_hash IN ("
+        "   SELECT target_hash FROM annotation_targets"
+        "   WHERE content_hash=? AND target_type=?"
+        " )",
+        (annotator_id, content_hash, target_type))
+    conn.commit()
+
+
+def prune_annotations_for_targets(conn, *, content_hash: str, target_type: str,
+                                  annotator_id: str,
+                                  keep_target_hashes: list[str]) -> None:
+    conn.execute("BEGIN IMMEDIATE")
+    params = [annotator_id, content_hash, target_type]
+    keep_clause = ""
+    if keep_target_hashes:
+        keep_clause = " AND annotation_targets.target_hash NOT IN (" + ",".join("?" * len(keep_target_hashes)) + ")"
+        params.extend(keep_target_hashes)
+    conn.execute(
+        "DELETE FROM annotations"
+        " WHERE annotator_id=?"
+        " AND target_hash IN ("
+        "   SELECT target_hash FROM annotation_targets"
+        "   WHERE content_hash=? AND target_type=?" + keep_clause +
+        " )",
+        params)
+    conn.commit()
+
+
 def get_annotations(conn, target_hash: str) -> list[dict]:
     rows = conn.execute(
         "SELECT a.* FROM annotations a"
@@ -400,7 +434,7 @@ def get_annotations_for_trajectory(conn, content_hash: str) -> list[dict]:
 def link_annotation_target(conn, *, target_hash: str, content_hash: str,
                            target_type: str, target_idx: int) -> None:
     conn.execute(
-        "INSERT OR IGNORE INTO annotation_targets(target_hash, content_hash, target_type, target_idx)"
+        "INSERT OR REPLACE INTO annotation_targets(target_hash, content_hash, target_type, target_idx)"
         " VALUES(?, ?, ?, ?)", (target_hash, content_hash, target_type, target_idx))
 
 

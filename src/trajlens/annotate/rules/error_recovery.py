@@ -2,7 +2,7 @@
 import json
 import re
 
-from trajlens.core.tool_aliases import canonical
+from trajlens.core.tool_aliases import READ_TOOLS, canonical
 
 # ponytail: strong signals — structural markers that reliably indicate tool-level errors,
 # not just the word "error" appearing in source code the tool returned.
@@ -80,6 +80,10 @@ def _has_tool_error(output: str, args_json: str | None) -> bool:
     return _has_error(output)
 
 
+def _is_read_only_tool(tool_name: str | None) -> bool:
+    return bool(tool_name and canonical(tool_name) in READ_TOOLS)
+
+
 def _error_summary(output: str) -> str:
     if not output:
         return ""
@@ -112,6 +116,8 @@ def annotate(unit, ctx):
     calls_by_id = {it.call_id: it for it in unit if it.type == "function_call"}
     for it in unit:
         call = calls_by_id.get(it.call_id) if it.type == "function_call_output" else None
+        if call and _is_read_only_tool(call.name):
+            continue
         args_json = call.arguments if call else None
         if it.type == "function_call_output" and _has_tool_error(it.output, args_json):
             errors.append(_error_summary(it.output))

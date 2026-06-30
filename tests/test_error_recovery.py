@@ -118,6 +118,17 @@ def test_traceback_detected():
     assert out["has_error"] is True
 
 
+def test_read_output_with_traceback_text_is_not_tool_error():
+    unit = [_call("Read", {"file_path": "/tmp/nested-session.log"}),
+            _output("The saved conversation includes:\n"
+                    "Traceback (most recent call last):\n"
+                    "ModuleNotFoundError: No module named 'pandas'")]
+
+    out = error_recovery.annotate(unit, unit)
+
+    assert out == {"has_error": False, "recovered": None, "error_summary": None}
+
+
 def test_error_summary_prefers_pytest_failed_line():
     output = (
         "============================= test session starts ==============================\n"

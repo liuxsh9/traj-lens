@@ -80,7 +80,16 @@ async def run_annotator(conn, spec: AnnotatorSpec, annotator_mod, *,
         traj = repo.get_trajectory(conn, ch)
         if traj is None:
             continue
-        for idx, (th, unit, unit_range) in enumerate(enumerate_targets(traj, spec.target)):
+        targets = enumerate_targets(traj, spec.target)
+        repo.prune_annotations_for_targets(
+            conn, content_hash=ch, target_type=spec.target.value,
+            annotator_id=spec.id,
+            keep_target_hashes=[th for th, _unit, _unit_range in targets])
+        if force:
+            repo.delete_annotations_for_targets(
+                conn, content_hash=ch, target_type=spec.target.value,
+                annotator_id=spec.id)
+        for idx, (th, unit, unit_range) in enumerate(targets):
             total += 1
             if spec.type == "rule":
                 rule_targets.append((ch, traj.items, th, unit, unit_range, idx))

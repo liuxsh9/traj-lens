@@ -4,4 +4,4 @@ target: step
 context: whole
 module: trajlens.annotate.rules.error_recovery
 # bump when rule heuristics or target identity assumptions change
-revision: 2
+revision: 3
