@@ -47,6 +47,36 @@ export interface CodeChange {
   command: string | null;
 }
 
+export interface LoopEditPoint {
+  key: string;
+  run_id?: number;
+  runId?: number;
+  step_id?: number;
+  stepId?: number;
+  item_idx?: number;
+  itemIdx?: number;
+}
+
+export interface LoopEpisode {
+  id: string;
+  path: string;
+  edit_count?: number;
+  editCount?: number;
+  start_key?: string;
+  startKey?: string;
+  trigger_key?: string;
+  triggerKey?: string;
+  end_key?: string;
+  endKey?: string;
+  start_idx?: number;
+  startIdx?: number;
+  end_idx?: number;
+  endIdx?: number;
+  interval_keys?: string[];
+  intervalKeys?: string[];
+  points: LoopEditPoint[];
+}
+
 export interface Trajectory {
   content_hash: string;
   items: Item[];
@@ -55,6 +85,7 @@ export interface Trajectory {
   annotations?: Annotation[];
   code_changes?: CodeChange[];
   metrics?: Record<string, number | null>;
+  loop_episodes?: LoopEpisode[];
   security_findings?: SemgrepFinding[];
   security_scan?: { ruleset_version: string; scanned: number; finding_count: number; scanned_at: string } | null;
 }

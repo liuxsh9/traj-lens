@@ -219,6 +219,30 @@ def test_update_dataset_rejects_empty_name(tmp_path):
     assert r.status_code == 422
 
 
+def test_loop_count_matches_detail_loop_episodes(tmp_path):
+    c = _client(tmp_path)
+    ds = c.post("/api/v1/datasets", json={"name": "loops"}).json()
+    raw = {
+        "messages": [
+            {"role": "user", "content": "edit same file repeatedly"},
+            {"role": "assistant", "tool_calls": [
+                {"id": "a", "type": "function", "function": {"name": "edit", "arguments": json.dumps({"file_path": "a.py", "new_string": "1"})}},
+                {"id": "b", "type": "function", "function": {"name": "edit", "arguments": json.dumps({"file_path": "a.py", "new_string": "2"})}},
+                {"id": "c", "type": "function", "function": {"name": "edit", "arguments": json.dumps({"file_path": "a.py", "new_string": "3"})}},
+                {"id": "d", "type": "function", "function": {"name": "edit", "arguments": json.dumps({"file_path": "a.py", "new_string": "4"})}},
+            ]},
+            {"role": "assistant", "content": "done"},
+        ]
+    }
+    _upload_and_wait(c, ds["id"], json.dumps(raw) + "\n")
+
+    row = c.get(f"/api/v1/datasets/{ds['id']}/trajectories").json()["items"][0]
+    detail = c.get(f"/api/v1/trajectories/{row['content_hash']}").json()
+
+    assert row["metrics"]["loop_count"] == 1
+    assert len(detail["loop_episodes"]) == row["metrics"]["loop_count"]
+
+
 def test_update_missing_dataset_404(tmp_path):
     c = _client(tmp_path)
 

@@ -113,7 +113,9 @@ def get_one(content_hash: str, conn: sqlite3.Connection = Depends(_conn)):
     result["metrics"] = repo.get_metrics_for_trajectory(conn, content_hash)
     # read-time projection of file edits/creates + shell runs (slice-5)
     from trajlens.core.code_changes import changes_as_dicts
+    from trajlens.core.loop_episodes import loop_episodes_as_dicts
     result["code_changes"] = changes_as_dicts(traj.items)
+    result["loop_episodes"] = loop_episodes_as_dicts(traj.items)
     # persisted semgrep findings (if scanned before) — shown without re-scanning
     result["security_findings"] = repo.get_security_findings(conn, content_hash)
     result["security_scan"] = repo.get_security_scan(conn, content_hash)

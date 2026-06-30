@@ -249,22 +249,37 @@ def test_overall_score_dimensions():
     assert fn(None, None, _anns(resolution="unverified", pb=10)) == 35.0
 
 
-def test_loop_and_recovery_counts_from_annotations():
+def test_recovery_count_from_annotations():
     from trajlens.metrics import REGISTRY
 
     anns = [
-        {"annotator_id": "loop_detect", "value": {"detected": True, "files": {"a.py": 3}}, "target_idx": 0},
-        {"annotator_id": "loop_detect", "value": {"detected": True, "files": {"a.py": 3}}, "target_idx": 1},
-        {"annotator_id": "loop_detect", "value": {"detected": True, "files": {"a.py": 4}}, "target_idx": 2},
-        {"annotator_id": "loop_detect", "value": {"detected": True, "files": {"a.py": 4, "b.py": 3}}, "target_idx": 3},
-        {"annotator_id": "loop_detect", "value": {"detected": False, "files": {}}, "target_idx": 4},
         {"annotator_id": "error_recovery", "value": {"has_error": True, "recovered": True}, "target_idx": 0},
         {"annotator_id": "error_recovery", "value": {"has_error": True, "recovered": False}, "target_idx": 1},
         {"annotator_id": "error_recovery", "value": {"has_error": False, "recovered": False}, "target_idx": 2},
     ]
 
-    assert REGISTRY["loop_count"][0](None, None, anns) == 2
     assert REGISTRY["recovery_count"][0](None, None, anns) == 1
+
+
+def test_loop_count_uses_episode_count_from_code_changes():
+    from trajlens.core.grouping import assign_groups
+    from trajlens.core.loop_episodes import build_loop_episodes
+    from trajlens.core.model import FunctionCallItem
+
+    items = assign_groups([
+        FunctionCallItem(name="edit", call_id="a", arguments=json.dumps({"file_path": "a.py", "new_string": "1"})),
+        FunctionCallItem(name="edit", call_id="b", arguments=json.dumps({"file_path": "a.py", "new_string": "2"})),
+        FunctionCallItem(name="edit", call_id="c", arguments=json.dumps({"file_path": "a.py", "new_string": "3"})),
+        FunctionCallItem(name="edit", call_id="d", arguments=json.dumps({"file_path": "a.py", "new_string": "4"})),
+        FunctionCallItem(name="edit", call_id="e", arguments=json.dumps({"file_path": "a.py", "new_string": "5"})),
+        FunctionCallItem(name="edit", call_id="f", arguments=json.dumps({"file_path": "a.py", "new_string": "6"})),
+    ])
+    traj = Trajectory(content_hash=content_hash(items), items=items)
+
+    episodes = build_loop_episodes(traj.items)
+
+    assert len(episodes) == 1
+    assert REGISTRY["loop_count"][0](traj, None, []) == 1
 
 
 # ── Staleness ─────────────────────────────────────────────────────────

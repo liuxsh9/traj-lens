@@ -1,4 +1,4 @@
-import type { CodeChange, Item } from "../api";
+import type { CodeChange, Item, LoopEpisode as ApiLoopEpisode } from "../api";
 
 export const LOOP_GAP_STEPS = 4;
 
@@ -136,6 +136,26 @@ export function buildLoopEpisodes(
 
   episodes.sort((a, b) => a.startIdx - b.startIdx || a.endIdx - b.endIdx || a.path.localeCompare(b.path));
   return episodes;
+}
+
+export function normalizeLoopEpisodes(episodes: ApiLoopEpisode[] = []): LoopEpisode[] {
+  return episodes.map((ep) => ({
+    id: ep.id,
+    path: ep.path,
+    editCount: ep.editCount ?? ep.edit_count ?? 0,
+    startKey: ep.startKey ?? ep.start_key ?? "",
+    triggerKey: ep.triggerKey ?? ep.trigger_key ?? "",
+    endKey: ep.endKey ?? ep.end_key ?? "",
+    startIdx: ep.startIdx ?? ep.start_idx ?? 0,
+    endIdx: ep.endIdx ?? ep.end_idx ?? 0,
+    intervalKeys: ep.intervalKeys ?? ep.interval_keys ?? [],
+    points: ep.points.map((p) => ({
+      key: p.key,
+      runId: p.runId ?? p.run_id ?? 0,
+      stepId: p.stepId ?? p.step_id ?? 0,
+      itemIdx: p.itemIdx ?? p.item_idx ?? 0,
+    })),
+  }));
 }
 
 export function loopStepRole(ep: LoopEpisode, key: string): LoopStepRole | null {

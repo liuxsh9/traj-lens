@@ -7,7 +7,7 @@ import { CardStack, PinnedUser, PinnedReply } from "./CardStack";
 import { TrimBar } from "./TrimBar";
 import { ChangesPanel } from "./ChangesPanel";
 import { buildStepErrorMarkers } from "./errorMarkers";
-import { buildLoopEpisodes } from "./loopMarkers";
+import { normalizeLoopEpisodes } from "./loopMarkers";
 
 export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () => void }) {
   const { data: traj, error, isLoading } = useQuery({
@@ -112,7 +112,7 @@ export function TrajectoryViewer({ hash, onBack }: { hash: string; onBack: () =>
 
   const loopEpisodes = useMemo(() => {
     if (!traj) return [];
-    return buildLoopEpisodes(traj.code_changes ?? [], traj.items);
+    return normalizeLoopEpisodes(traj.loop_episodes ?? []);
   }, [traj]);
 
   // ── Click minimap tick → scroll cards ──

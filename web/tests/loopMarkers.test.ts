@@ -5,6 +5,7 @@ import {
   loopMarkerForStep,
   loopStepRole,
   minimapLoopClass,
+  normalizeLoopEpisodes,
 } from "../src/components/loopMarkers";
 
 function item(runId: number, stepId: number): Item {
@@ -106,3 +107,23 @@ assert.deepEqual(researchEpisodes.map((e) => ({
 ]);
 assert.equal(loopMarkerForStep("2-3", researchEpisodes).length, 0);
 assert.equal(loopMarkerForStep("3-6", researchEpisodes)[0]?.episode.path, "research-client.tsx");
+
+const normalized = normalizeLoopEpisodes([{
+  id: "a.py:0-0:0-2:0",
+  path: "a.py",
+  edit_count: 3,
+  start_key: "0-0",
+  trigger_key: "0-2",
+  end_key: "0-2",
+  start_idx: 0,
+  end_idx: 2,
+  interval_keys: ["0-0", "0-1", "0-2"],
+  points: [
+    { key: "0-0", run_id: 0, step_id: 0, item_idx: 0 },
+    { key: "0-1", run_id: 0, step_id: 1, item_idx: 1 },
+    { key: "0-2", run_id: 0, step_id: 2, item_idx: 2 },
+  ],
+}]);
+
+assert.equal(normalized[0].editCount, 3);
+assert.equal(loopMarkerForStep("0-2", normalized)[0]?.role, "end");

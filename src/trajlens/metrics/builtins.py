@@ -7,6 +7,7 @@ so the three annotation-reading metrics below don't each re-query the DB.
 import json
 
 from trajlens.core.model import Trajectory
+from trajlens.core.loop_episodes import build_loop_episodes
 from trajlens.metrics import register
 
 _VERSION = "2"
@@ -86,24 +87,9 @@ def recovery_count(traj: Trajectory, conn, anns) -> int:
     return count
 
 
-@register("loop_count", _LOOP_COUNT_VERSION, depends_on=["loop_detect"])
+@register("loop_count", _LOOP_COUNT_VERSION)
 def loop_count(traj: Trajectory, conn, anns) -> int:
-    counted_files: set[str] = set()
-    fallback_count = 0
-    for a in anns:
-        if a["annotator_id"] != "loop_detect":
-            continue
-        v = json.loads(a["value"]) if isinstance(a["value"], str) else a["value"]
-        if not v.get("detected"):
-            continue
-        files = v.get("files") or {}
-        if isinstance(files, dict) and files:
-            for path, edit_count in files.items():
-                if edit_count >= 3 and path not in counted_files:
-                    counted_files.add(path)
-        else:
-            fallback_count += 1
-    return len(counted_files) or fallback_count
+    return len(build_loop_episodes(traj.items))
 
 
 @register("acceptance_likelihood", _VERSION, depends_on=["change_acceptance"])
