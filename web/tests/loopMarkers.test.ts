@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import type { CodeChange, Item } from "../src/api";
 import {
   buildLoopEpisodes,
+  loopLabelMarkersForStep,
   loopMarkerForStep,
   loopStepRole,
   minimapLoopClass,
@@ -71,6 +72,8 @@ const triggerMarker = loopMarkerForStep("0-5", episodes);
 assert.equal(triggerMarker.length, 1);
 assert.equal(triggerMarker[0].role, "trigger");
 assert.equal(triggerMarker[0].episode.editCount, 4);
+assert.equal(loopLabelMarkersForStep("0-2", episodes).length, 1);
+assert.equal(loopLabelMarkersForStep("0-5", episodes).length, 0);
 
 assert.equal(minimapLoopClass("0-2", episodes), "flag-loop-start");
 assert.equal(minimapLoopClass("0-4", episodes), "flag-loop");
@@ -107,6 +110,8 @@ assert.deepEqual(researchEpisodes.map((e) => ({
 ]);
 assert.equal(loopMarkerForStep("2-3", researchEpisodes).length, 0);
 assert.equal(loopMarkerForStep("3-6", researchEpisodes)[0]?.episode.path, "research-client.tsx");
+assert.equal(loopLabelMarkersForStep("3-3", researchEpisodes)[0]?.episode.path, "research-client.tsx");
+assert.equal(loopLabelMarkersForStep("3-6", researchEpisodes).length, 0);
 
 const normalized = normalizeLoopEpisodes([{
   id: "a.py:0-0:0-2:0",

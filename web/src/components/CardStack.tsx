@@ -4,6 +4,7 @@ import { markerBadgeText, stepMarkerKey, type StepErrorMarker } from "./errorMar
 import {
   loopEpisodeLabel,
   loopEpisodeTitle,
+  loopLabelMarkersForStep,
   loopMarkersForStep,
   loopStepRole,
   type LoopEpisode,
@@ -157,7 +158,7 @@ function StepCard({
     : "";
   const markerTitle = markerTooltip(marker);
   const stepKeyValue = stepKey(runId, stepId);
-  const triggerLoops = loopMarkers.filter((m) => m.episode.triggerKey === stepKeyValue);
+  const labelLoops = loopLabelMarkersForStep(stepKeyValue, loopMarkers.map((m) => m.episode));
   const visibleLoopLanes = loopMarkers.slice(0, 3);
   const extraLoopCount = Math.max(0, loopMarkers.length - visibleLoopLanes.length);
 
@@ -180,7 +181,7 @@ function StepCard({
         <span className="actor">🤖</span>
         <span className="summ">{summary}</span>
         <span className="meta">
-          {triggerLoops.slice(0, 2).map((lm) => (
+          {labelLoops.slice(0, 2).map((lm) => (
             <span
               key={lm.episode.id}
               className="chip-sm loop-chip"
@@ -189,9 +190,9 @@ function StepCard({
               LOOP · {loopEpisodeLabel(lm.episode)}
             </span>
           ))}
-          {triggerLoops.length > 2 && (
-            <span className="chip-sm loop-chip" title={`${triggerLoops.length} loops trigger here`}>
-              +{triggerLoops.length - 2}
+          {labelLoops.length > 2 && (
+            <span className="chip-sm loop-chip" title={`${labelLoops.length} loops start here`}>
+              +{labelLoops.length - 2}
             </span>
           )}
           {marker && (

@@ -64,7 +64,7 @@ export function loopEpisodeLabel(ep: LoopEpisode): string {
 }
 
 export function loopEpisodeTitle(ep: LoopEpisode): string {
-  return `loop: ${ep.path}\nsteps ${ep.startKey} → ${ep.endKey}\n${ep.editCount} edits`;
+  return `loop: ${ep.path}\nsteps ${ep.startKey} → ${ep.endKey}\nconfirmed at ${ep.triggerKey}\n${ep.editCount} edits`;
 }
 
 export function buildLoopEpisodes(
@@ -177,6 +177,10 @@ export function loopMarkersForStep(key: string, episodes: LoopEpisode[]): LoopSt
 
 export function loopMarkerForStep(key: string, episodes: LoopEpisode[]): LoopStepMarker[] {
   return loopMarkersForStep(key, episodes);
+}
+
+export function loopLabelMarkersForStep(key: string, episodes: LoopEpisode[]): LoopStepMarker[] {
+  return loopMarkersForStep(key, episodes).filter((m) => m.episode.startKey === key);
 }
 
 export function minimapLoopClass(key: string, episodes: LoopEpisode[]): string {
