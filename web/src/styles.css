@@ -544,18 +544,6 @@ table.list {
 .loop-lane.loop-start {
   border-radius: 4px 4px 0 0;
 }
-.loop-lane.loop-start::after,
-.loop-lane.loop-single::after {
-  content: "";
-  position: absolute;
-  left: -3px;
-  top: 14px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #b87016;
-  border: 2px solid var(--panel);
-}
 .loop-lane.loop-end {
   border-radius: 0 0 4px 4px;
 }
